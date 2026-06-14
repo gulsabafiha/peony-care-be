@@ -200,6 +200,30 @@ class TestClaims:
         assert data["count"] == 1
         assert len(data["grouped_by_week"]) == 1
 
+    def test_claim_detail(self, api_client, receiver_user, food_item):
+        client = auth_client(api_client, receiver_user)
+        create = client.post(
+            reverse("receiver_claims:receiver-claims"),
+            {
+                "food_id": str(food_item.id),
+                "qr_payload": food_item.food_qr_data,
+                "lat": LAT,
+                "lng": LNG,
+            },
+            format="json",
+        )
+        assert create.status_code == 201
+        claim_id = FoodClaim.objects.get(receiver=receiver_user).id
+
+        response = client.get(
+            reverse("receiver_claims:receiver-claim-detail", kwargs={"claim_id": claim_id})
+        )
+        assert response.status_code == 200
+        detail = response.json()["data"]
+        assert detail["status"] == "CLAIMED"
+        assert detail["restaurant_name"] == "Tian Tian Hainanese"
+        assert detail["food"]["name"] == "Chicken Rice"
+
 
 class TestReceiverProfile:
     def test_get_and_update_profile(self, api_client, receiver_user):

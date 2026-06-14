@@ -17,3 +17,11 @@ class IsRestaurant(BasePermission):
             bool(request.user and request.user.is_authenticated)
             and request.user.role == UserRole.RESTAURANT
         )
+
+
+class IsDonor(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            bool(request.user and request.user.is_authenticated)
+            and request.user.role == UserRole.DONOR
+        )

@@ -149,6 +149,24 @@ class TestRegistration:
         assert user.restaurant_profile.name == "Tian Tian Hainanese"
         assert user.restaurant_profile.is_approved is False
 
+    def test_register_donor(self, api_client):
+        token = self._registration_token(api_client)
+        response = api_client.post(
+            reverse("auth-register-donor"),
+            {"display_name": "James Tan", "contact_email": "james@example.com"},
+            format="json",
+            HTTP_REGISTRATION_TOKEN=token,
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert "access" in data
+        assert "refresh" in data
+        user = User.objects.get(phone_e164=PHONE)
+        assert user.role == UserRole.DONOR
+        assert user.is_active is True
+        assert user.donor_profile.display_name == "James Tan"
+        assert user.donor_profile.contact_email == "james@example.com"
+
     def test_register_requires_token(self, api_client):
         response = api_client.post(
             reverse("auth-register-receiver"),

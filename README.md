@@ -179,9 +179,28 @@ Unapproved restaurants receive `403 RESTAURANT_NOT_APPROVED` when posting donati
 |--------|----------|-------------|
 | GET | `/api/v1/restaurants/{restaurant_id}/` | Public restaurant page (no auth) |
 
-### Donor — `/api/v1/donor/` (P2)
+### Donor — `/api/v1/donor/`
 
-Meal and money donation endpoints — not yet implemented.
+Requires `Authorization: Bearer` and donor role.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `dashboard/` | Impact stats + recent donations |
+| GET | `history/` | Meal and money donation history |
+| GET | `impact/` | Monthly chart data |
+| GET/PATCH | `credit-preference/` | `SHOW_NAME` \| `INITIALS` \| `ANONYMOUS` |
+| GET/PATCH | `profile/` | Name, photo, `contact_email` |
+| GET | `restaurants/` | Browse approved restaurants to sponsor |
+| GET | `restaurants/{id}/menu/` | Admin-managed menu |
+| POST | `meal-orders/` | Meal order → auto-posts sponsored `FoodItem` |
+| POST | `money-donations/` | Create donation + PayNow reference |
+| POST | `money-donations/{id}/confirm-transfer/` | Donor marks PayNow transfer sent |
+
+**Meal order flow:** donor picks menu items → `FoodItem` auto-created with sponsor credit → receivers can claim.
+
+**Money donation flow:** create → PayNow details + `reference_code` → donor confirms transfer → admin confirms in Django Admin → `total_amount_donated_sgd` updated.
+
+Menu items are managed in Django Admin only (not via restaurant API).
 
 ## End-to-end dev flow
 
@@ -193,6 +212,14 @@ Meal and money donation endpoints — not yet implemented.
 6. **Claim food** — `POST /api/v1/receiver/claims/` with QR scan payload
 7. **Restaurant views claims** — `GET /api/v1/restaurant/claims/today/`
 
+### Donor flow
+
+1. **Register a donor** — OTP send → verify → `POST /auth/register/donor/` with `Registration-Token`
+2. **Add menu items** — Django Admin → `Menu items` for an approved restaurant
+3. **Sponsor a meal** — `POST /api/v1/donor/meal-orders/` (auto-posts sponsored listing)
+4. **Or donate money** — `POST /api/v1/donor/money-donations/` → confirm transfer → admin confirms in Django Admin
+5. **View impact** — `GET /api/v1/donor/dashboard/` or `GET /api/v1/donor/impact/`
+
 ## Project structure
 
 ```
@@ -200,7 +227,7 @@ apps/
   accounts/      # users, OTP, JWT, receiver profile
   donations/     # receiver browse + restaurant donation CRUD
   claims/        # receiver claims + restaurant claims board
-  donors/        # meal/money donations (P2)
+  donors/        # donor dashboard, meal/money donations
   notifications/
   common/        # response envelope, permissions, geo, geocoding
 config/settings/
@@ -219,7 +246,8 @@ Key files:
 | `apps/donations/receiver_*.py` | Receiver browse/search |
 | `apps/donations/restaurant_*.py` | Restaurant donations |
 | `apps/claims/services.py` | Transactional claim logic |
-| `apps/common/permissions.py` | `IsReceiver`, `IsRestaurant` |
+| `apps/common/permissions.py` | `IsReceiver`, `IsRestaurant`, `IsDonor` |
+| `apps/donors/services.py` | Meal orders, money donations, donor profile |
 | `config/urls.py` | All routing |
 
 ## Environment variables
@@ -232,6 +260,8 @@ See `.env.example`. Notable settings:
 | `MAX_CLAIM_DISTANCE_M` | `500` | Max distance (m) between receiver and restaurant to claim |
 | `DAILY_CLAIM_LIMIT` | `1` | Max claims per receiver per day |
 | `DEFAULT_BROWSE_RADIUS_KM` | `5` | Default browse radius |
+| `PAYNOW_UEN` | — | PayNow UEN for money donations |
+| `PAYNOW_ACCOUNT_NAME` | `Peony Care Ltd` | PayNow display name |
 
 ## Tests
 
@@ -239,7 +269,7 @@ See `.env.example`. Notable settings:
 pytest
 ```
 
-30 tests cover auth, receiver browse/claims, and restaurant donations/claims.
+42 tests cover auth, receiver, restaurant, and donor modules.
 
 Lint and format:
 
@@ -265,8 +295,8 @@ Required GitHub secrets for CD: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `E
 
 ## Not yet implemented
 
-- Donor meal/money endpoints (P2)
 - Restaurant approval API (admin only today)
 - S3 QR image upload (`food_qr_image_url`)
 - OneMap geocoding (stub returns Singapore default coords)
 - Auto-expire food items past pickup window
+- Notification settings (P2)

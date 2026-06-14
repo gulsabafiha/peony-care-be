@@ -157,6 +157,58 @@ class TestRestaurantDonations:
         assert delete.status_code == 200
         assert FoodItem.objects.filter(id=food_id).count() == 0
 
+    def test_get_donation_detail(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        now = timezone.now()
+        create = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Noodles",
+                "description": "2 packs",
+                "category": "NOODLES",
+                "quantity": 3,
+                "pickup_start": now.isoformat(),
+                "pickup_end": (now + timedelta(hours=2)).isoformat(),
+            },
+            format="json",
+        )
+        food_id = create.json()["data"]["id"]
+
+        response = client.get(
+            reverse("restaurant_donations:restaurant-donation-detail", kwargs={"food_id": food_id})
+        )
+        assert response.status_code == 200
+        detail = response.json()["data"]
+        assert detail["name"] == "Noodles"
+        assert detail["quantity_available"] == 3
+        assert "claims" in detail
+
+    def test_patch_donation(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        now = timezone.now()
+        create = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Snacks",
+                "category": "SNACKS",
+                "quantity": 4,
+                "pickup_start": now.isoformat(),
+                "pickup_end": (now + timedelta(hours=2)).isoformat(),
+            },
+            format="json",
+        )
+        food_id = create.json()["data"]["id"]
+
+        response = client.patch(
+            reverse("restaurant_donations:restaurant-donation-detail", kwargs={"food_id": food_id}),
+            {"name": "Updated Snacks", "quantity": 6},
+            format="json",
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["name"] == "Updated Snacks"
+        assert data["quantity_available"] == 6
+
 
 class TestRestaurantProfile:
     def test_profile_and_approval_status(self, api_client, restaurant_user):
@@ -169,6 +221,23 @@ class TestRestaurantProfile:
         status = client.get(reverse("restaurant_donations:restaurant-approval-status"))
         assert status.status_code == 200
         assert status.json()["data"]["is_approved"] is True
+
+    def test_patch_profile(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        response = client.patch(
+            reverse("restaurant_donations:restaurant-profile"),
+            {
+                "contact_name": "New Manager",
+                "about": "Family-run since 1990",
+                "opening_hours": "10am - 9pm",
+            },
+            format="json",
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["contact_name"] == "New Manager"
+        assert data["about"] == "Family-run since 1990"
+        assert data["opening_hours"] == "10am - 9pm"
 
     def test_public_restaurant_page(self, api_client, restaurant_user):
         restaurant = restaurant_user.restaurant_profile

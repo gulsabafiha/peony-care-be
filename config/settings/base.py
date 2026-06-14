@@ -129,6 +129,10 @@ REGISTRATION_TOKEN_MAX_AGE_SECONDS = config(
     "REGISTRATION_TOKEN_MAX_AGE_SECONDS", default=1800, cast=int
 )
 
+# PayNow (money donations)
+PAYNOW_UEN = config("PAYNOW_UEN", default="")
+PAYNOW_ACCOUNT_NAME = config("PAYNOW_ACCOUNT_NAME", default="Peony Care Ltd")
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Peony Care API",
     "DESCRIPTION": "Backend API for the Peony Care food-share application.",
