@@ -2,15 +2,18 @@ from drf_spectacular.utils import PolymorphicProxySerializer, inline_serializer
 from rest_framework import serializers
 
 
-def enveloped_schema(data_serializer, envelope_name: str, *alt_serializers):
+def enveloped_schema(data_serializer, envelope_name: str, *alt_serializers, many: bool = False):
     """Wrap a response serializer in the Peony Care API envelope for OpenAPI."""
     data_types = [data_serializer, *alt_serializers]
     if len(data_types) > 1:
         data_field = PolymorphicProxySerializer(
             component_name=f"{envelope_name}Data",
             serializers=data_types,
+            many=many,
             resource_type_field_name=None,
         )
+    elif many:
+        data_field = data_serializer(many=True)
     else:
         data_field = data_serializer
 
