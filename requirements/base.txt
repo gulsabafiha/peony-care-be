@@ -1,0 +1,13 @@
+Django>=5.2,<5.3
+djangorestframework>=3.15
+djangorestframework-simplejwt>=5.4
+psycopg[binary]>=3.2
+python-decouple>=3.8
+dj-database-url>=2.3
+django-cors-headers>=4.6
+Pillow>=11.0
+qrcode>=8.0
+boto3>=1.35
+whitenoise>=6.8
+drf-spectacular>=0.28
+phonenumbers>=8.13

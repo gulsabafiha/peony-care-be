@@ -1,0 +1,57 @@
+from django.contrib import admin
+
+from apps.accounts.models import (
+    DonorProfile,
+    OtpChallenge,
+    ReceiverProfile,
+    RefreshToken,
+    RestaurantProfile,
+    User,
+)
+
+
+@admin.register(User)
+class UserAdmin(admin.ModelAdmin):
+    list_display = ("phone_e164", "role", "is_active", "is_staff", "created_at")
+    list_filter = ("role", "is_active", "is_staff")
+    search_fields = ("phone_e164",)
+    ordering = ("-created_at",)
+
+
+@admin.register(OtpChallenge)
+class OtpChallengeAdmin(admin.ModelAdmin):
+    list_display = ("phone_e164", "purpose", "attempts", "expires_at", "consumed_at")
+    list_filter = ("purpose",)
+    search_fields = ("phone_e164",)
+
+
+@admin.register(RefreshToken)
+class RefreshTokenAdmin(admin.ModelAdmin):
+    list_display = ("user", "expires_at", "revoked_at", "created_at")
+    search_fields = ("user__phone_e164",)
+
+
+@admin.register(ReceiverProfile)
+class ReceiverProfileAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "user", "total_claims", "last_claim_date")
+    search_fields = ("display_name", "user__phone_e164")
+
+
+@admin.register(RestaurantProfile)
+class RestaurantProfileAdmin(admin.ModelAdmin):
+    list_display = ("name", "uen", "is_approved", "is_verified", "total_food_shared")
+    list_filter = ("is_approved", "is_verified")
+    search_fields = ("name", "uen", "user__phone_e164")
+    actions = ["approve_restaurants"]
+
+    @admin.action(description="Approve selected restaurants")
+    def approve_restaurants(self, request, queryset):
+        from django.utils import timezone
+
+        queryset.update(is_approved=True, approved_at=timezone.now())
+
+
+@admin.register(DonorProfile)
+class DonorProfileAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "user", "credit_preference", "total_meals_sponsored")
+    search_fields = ("display_name", "user__phone_e164")
