@@ -9,3 +9,11 @@ class IsReceiver(BasePermission):
             bool(request.user and request.user.is_authenticated)
             and request.user.role == UserRole.RECEIVER
         )
+
+
+class IsRestaurant(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            bool(request.user and request.user.is_authenticated)
+            and request.user.role == UserRole.RESTAURANT
+        )

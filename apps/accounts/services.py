@@ -1,6 +1,5 @@
 import hashlib
 import logging
-import re
 import secrets
 from datetime import timedelta
 
@@ -21,6 +20,7 @@ from apps.accounts.models import (
 )
 from apps.common.choices import OtpPurpose, UserRole
 from apps.common.exceptions import PeonyAPIException
+from apps.common.geocoding import extract_postal_code, geocode_address
 
 logger = logging.getLogger(__name__)
 
@@ -221,23 +221,6 @@ def _serialize_user(user: User) -> dict:
     }
 
 
-def _extract_postal_code(address: str) -> str:
-    match = re.search(r"\b(\d{6})\b", address)
-    return match.group(1) if match else ""
-
-
-def _geocode_address(address: str) -> tuple[str, str]:
-    # P1 stub: integrate OneMap geocoding in production.
-    postal_code = _extract_postal_code(address)
-    if not postal_code:
-        raise PeonyAPIException(
-            code="INVALID_ADDRESS",
-            message="Address must include a valid Singapore postal code.",
-            http_status=400,
-        )
-    return "1.3521000", "103.8198000"
-
-
 @transaction.atomic
 def register_receiver(phone_e164: str, display_name: str) -> dict:
     user = _get_or_create_user(phone_e164, UserRole.RECEIVER)
@@ -264,8 +247,8 @@ def register_restaurant(phone_e164: str, data: dict) -> dict:
             http_status=409,
         )
 
-    latitude, longitude = _geocode_address(data["address"])
-    postal_code = _extract_postal_code(data["address"])
+    latitude, longitude = geocode_address(data["address"])
+    postal_code = extract_postal_code(data["address"])
 
     RestaurantProfile.objects.create(
         user=user,

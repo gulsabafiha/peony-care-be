@@ -169,8 +169,7 @@ def create_claim(
         raise PeonyAPIException(
             code="TOO_FAR_FROM_RESTAURANT",
             message=(
-                f"You must be within {settings.MAX_CLAIM_DISTANCE_M}m "
-                "of the restaurant to claim."
+                f"You must be within {settings.MAX_CLAIM_DISTANCE_M}m of the restaurant to claim."
             ),
             details={"distance_m": round(distance_m)},
             http_status=403,
@@ -237,12 +236,15 @@ def get_claim_detail(receiver: User, claim_id: str) -> dict:
             http_status=404,
         ) from exc
 
-    distance_km = haversine_distance_m(
-        float(claim.receiver_lat),
-        float(claim.receiver_lng),
-        float(claim.restaurant.latitude),
-        float(claim.restaurant.longitude),
-    ) / 1000
+    distance_km = (
+        haversine_distance_m(
+            float(claim.receiver_lat),
+            float(claim.receiver_lng),
+            float(claim.restaurant.latitude),
+            float(claim.restaurant.longitude),
+        )
+        / 1000
+    )
     data = _serialize_claim_response(claim, distance_km)
     data["food"] = {
         "id": str(claim.food.id),

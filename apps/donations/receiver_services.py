@@ -60,12 +60,7 @@ def _serialize_food_item(food: FoodItem, receiver_lat: float, receiver_lng: floa
     }
 
 
-def _filter_by_radius(
-    queryset,
-    lat: float,
-    lng: float,
-    radius_km: float,
-):
+def _filter_by_radius(queryset, lat: float, lng: float, radius_km: float):
     min_lat, max_lat, min_lng, max_lng = bounding_box(lat, lng, radius_km)
     queryset = queryset.filter(
         restaurant__latitude__gte=min_lat,

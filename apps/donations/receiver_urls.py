@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.donations.views import BrowseFoodView, FoodDetailView, SearchFoodView
+from apps.donations.receiver_views import BrowseFoodView, FoodDetailView, SearchFoodView
 
 urlpatterns = [
     path("donations/browse/", BrowseFoodView.as_view(), name="receiver-browse"),

@@ -7,6 +7,7 @@ Django REST API for the Peony Care food-share app (PostgreSQL + JWT + Docker).
 - Django 5.2 + Django REST Framework
 - PostgreSQL 16
 - JWT auth (SimpleJWT) with phone OTP
+- Swagger / OpenAPI (`drf-spectacular`)
 - Docker Compose for local dev
 - GitHub Actions CI/CD
 
@@ -17,17 +18,20 @@ cp .env.example .env
 docker compose up --build
 ```
 
-API health check: http://localhost:8000/health/
+| URL | Purpose |
+|-----|---------|
+| http://localhost:8000/health/ | Health check |
+| http://localhost:8000/api/docs/ | Swagger UI |
+| http://localhost:8000/api/schema/ | OpenAPI schema |
+| http://localhost:8000/admin/ | Django Admin |
 
-Swagger UI: http://localhost:8000/api/docs/
-
-OpenAPI schema: http://localhost:8000/api/schema/
-
-Create admin user:
+Create an admin user:
 
 ```bash
 docker compose exec web python manage.py createsuperuser
 ```
+
+Migrations run automatically on container start via `docker/entrypoint.sh`.
 
 ## Local development (without Docker)
 
@@ -41,38 +45,207 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+## Response format
+
+All API responses use a standard envelope:
+
+```json
+{
+  "status": "success",
+  "data": { },
+  "error": null,
+  "timestamp": "2026-06-14T12:00:00+08:00"
+}
+```
+
+Errors return `"status": "error"` with `error.code`, `error.message`, and optional `error.details`.
+
+## Authentication
+
+Phone OTP registration for three roles: **receiver**, **restaurant**, **donor**.
+
+### 1. Send OTP
+
+```http
+POST /api/v1/auth/otp/send/
+{ "phone": "+6591234567", "purpose": "register" }
+```
+
+With `OTP_PROVIDER=console` (default in dev), the code is printed to container logs:
+
+```
+[Peony OTP] +6591234567 (register): 123456
+```
+
+### 2. Verify OTP
+
+```http
+POST /api/v1/auth/otp/verify/
+{ "phone": "+6591234567", "code": "123456", "purpose": "register" }
+```
+
+Returns a short-lived `registration_token`.
+
+### 3. Register
+
+```http
+POST /api/v1/auth/register/receiver/
+POST /api/v1/auth/register/restaurant/
+POST /api/v1/auth/register/donor/
+```
+
+Include the token in the `Registration-Token` header. Response includes `access` and `refresh` JWT tokens.
+
+### 4. Authenticated requests
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Refresh: `POST /api/v1/auth/token/refresh/`  
+Logout: `POST /api/v1/auth/logout/`
+
+## API modules (P1)
+
+### Auth — `/api/v1/auth/`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `otp/send/` | Send OTP |
+| POST | `otp/verify/` | Verify OTP, get registration token |
+| POST | `register/receiver/` | Register receiver |
+| POST | `register/restaurant/` | Register restaurant |
+| POST | `register/donor/` | Register donor |
+| POST | `token/refresh/` | Refresh JWT |
+| POST | `logout/` | Revoke refresh token |
+
+### Receiver — `/api/v1/receiver/`
+
+Requires `Authorization: Bearer` and receiver role.
+
+**Donations** (`receiver_donations` namespace)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `donations/browse/` | Browse nearby active listings |
+| GET | `donations/search/` | Search by keyword / filters |
+| GET | `donations/{food_id}/` | Food detail |
+
+**Claims** (`receiver_claims` namespace)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `claims/today/` | Today's claim status (daily limit) |
+| GET | `claims/` | Claim history |
+| POST | `claims/` | Claim food (scan QR payload) |
+| GET | `claims/{claim_id}/` | Claim detail |
+
+**Profile** (`receiver_accounts` namespace)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/PATCH | `profile/` | Receiver profile |
+| GET | `stats/` | Meals saved, claims count |
+
+### Restaurant — `/api/v1/restaurant/`
+
+Requires `Authorization: Bearer` and restaurant role.
+
+**Donations** (`restaurant_donations` namespace)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `dashboard/` | Today's stats and active listings |
+| GET | `donations/?status=active\|past\|inactive` | List donations |
+| POST | `donations/` | Create donation (requires approval) |
+| GET/PATCH/DELETE | `donations/{food_id}/` | Detail / update / soft-delete |
+| POST | `donations/{food_id}/close/` | Close listing |
+| POST | `donations/{food_id}/reactivate/` | Re-open closed listing |
+| GET/PATCH | `profile/` | Restaurant profile |
+| GET | `approval-status/` | Pending / approved status |
+
+**Claims** (`restaurant_claims` namespace)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `claims/today/` | Today's claims board |
+| GET | `donations/{food_id}/claims/` | Claims for one donation |
+
+Unapproved restaurants receive `403 RESTAURANT_NOT_APPROVED` when posting donations. Approve via Django Admin (`restaurant_profiles.is_approved`).
+
+### Public
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/restaurants/{restaurant_id}/` | Public restaurant page (no auth) |
+
+### Donor — `/api/v1/donor/` (P2)
+
+Meal and money donation endpoints — not yet implemented.
+
+## End-to-end dev flow
+
+1. **Register a restaurant** — OTP send → verify → `POST /auth/register/restaurant/` with `Registration-Token`
+2. **Approve restaurant** — Django Admin → `Restaurant profiles` → set `is_approved = True`
+3. **Post a donation** — `POST /api/v1/restaurant/donations/` (QR payload generated automatically)
+4. **Register a receiver** — same OTP flow with `register/receiver/`
+5. **Browse food** — `GET /api/v1/receiver/donations/browse/`
+6. **Claim food** — `POST /api/v1/receiver/claims/` with QR scan payload
+7. **Restaurant views claims** — `GET /api/v1/restaurant/claims/today/`
+
 ## Project structure
 
 ```
 apps/
-  accounts/      # users, OTP, profiles, JWT
-  donations/     # food_items, browse (receiver/restaurant)
-  claims/        # instant claim on QR scan
+  accounts/      # users, OTP, JWT, receiver profile
+  donations/     # receiver browse + restaurant donation CRUD
+  claims/        # receiver claims + restaurant claims board
   donors/        # meal/money donations (P2)
   notifications/
-  common/        # response envelope, geo utils
+  common/        # response envelope, permissions, geo, geocoding
 config/settings/
   base.py
   development.py
   production.py
+docker/
+  Dockerfile, Dockerfile.dev, entrypoint.sh
 ```
 
-## API modules (P1)
+Key files:
 
-| Module | Base path |
-|--------|-----------|
-| Auth | `/api/v1/auth/` |
-| Receiver | `/api/v1/receiver/` |
-| Restaurant | `/api/v1/restaurant/` |
-| Donor | `/api/v1/donor/` |
-| Shared | `/api/v1/` |
+| File | Purpose |
+|------|---------|
+| `apps/accounts/services.py` | OTP, registration, JWT |
+| `apps/donations/receiver_*.py` | Receiver browse/search |
+| `apps/donations/restaurant_*.py` | Restaurant donations |
+| `apps/claims/services.py` | Transactional claim logic |
+| `apps/common/permissions.py` | `IsReceiver`, `IsRestaurant` |
+| `config/urls.py` | All routing |
 
-Endpoint implementations are added incrementally per the API design doc.
+## Environment variables
+
+See `.env.example`. Notable settings:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTP_PROVIDER` | `console` | `console` prints OTP to logs; `twilio` / `sns` for production |
+| `MAX_CLAIM_DISTANCE_M` | `500` | Max distance (m) between receiver and restaurant to claim |
+| `DAILY_CLAIM_LIMIT` | `1` | Max claims per receiver per day |
+| `DEFAULT_BROWSE_RADIUS_KM` | `5` | Default browse radius |
 
 ## Tests
 
 ```bash
 pytest
+```
+
+30 tests cover auth, receiver browse/claims, and restaurant donations/claims.
+
+Lint and format:
+
+```bash
+ruff check .
+ruff format .
 ```
 
 ## Production
@@ -81,7 +254,7 @@ pytest
 docker compose -f docker-compose.prod.yml up --build
 ```
 
-Set `DJANGO_SETTINGS_MODULE=config.settings.production` and strong `DJANGO_SECRET_KEY`.
+Set `DJANGO_SETTINGS_MODULE=config.settings.production` and a strong `DJANGO_SECRET_KEY`.
 
 ## CI/CD
 
@@ -89,3 +262,11 @@ Set `DJANGO_SETTINGS_MODULE=config.settings.production` and strong `DJANGO_SECRE
 - **CD** (`.github/workflows/cd.yml`): push image to ECR when AWS secrets are configured
 
 Required GitHub secrets for CD: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ECR_REGISTRY`.
+
+## Not yet implemented
+
+- Donor meal/money endpoints (P2)
+- Restaurant approval API (admin only today)
+- S3 QR image upload (`food_qr_image_url`)
+- OneMap geocoding (stub returns Singapore default coords)
+- Auto-expire food items past pickup window

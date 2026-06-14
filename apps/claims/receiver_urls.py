@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.claims.views import ClaimDetailView, ClaimsView, TodayClaimStatusView
+from apps.claims.receiver_views import ClaimDetailView, ClaimsView, TodayClaimStatusView
 
 urlpatterns = [
     path("claims/today/", TodayClaimStatusView.as_view(), name="receiver-claims-today"),

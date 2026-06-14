@@ -3,6 +3,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.common.views import health_check
+from apps.donations.restaurant_views import PublicRestaurantView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -12,11 +13,14 @@ urlpatterns = [
     path("api/v1/auth/", include("apps.accounts.urls")),
     path(
         "api/v1/receiver/",
-        include(("apps.donations.urls", "receiver_donations"), namespace="receiver_donations"),
+        include(
+            ("apps.donations.receiver_urls", "receiver_donations"),
+            namespace="receiver_donations",
+        ),
     ),
     path(
         "api/v1/receiver/",
-        include(("apps.claims.urls", "receiver_claims"), namespace="receiver_claims"),
+        include(("apps.claims.receiver_urls", "receiver_claims"), namespace="receiver_claims"),
     ),
     path(
         "api/v1/receiver/",
@@ -25,8 +29,25 @@ urlpatterns = [
             namespace="receiver_accounts",
         ),
     ),
-    path("api/v1/restaurant/", include("apps.donations.urls")),
-    path("api/v1/restaurant/", include("apps.claims.urls")),
+    path(
+        "api/v1/restaurant/",
+        include(
+            ("apps.donations.restaurant_urls", "restaurant_donations"),
+            namespace="restaurant_donations",
+        ),
+    ),
+    path(
+        "api/v1/restaurant/",
+        include(
+            ("apps.claims.restaurant_urls", "restaurant_claims"),
+            namespace="restaurant_claims",
+        ),
+    ),
+    path(
+        "api/v1/restaurants/<uuid:restaurant_id>/",
+        PublicRestaurantView.as_view(),
+        name="public-restaurant",
+    ),
     path("api/v1/donor/", include("apps.donors.urls")),
     path("api/v1/", include("apps.notifications.urls")),
 ]

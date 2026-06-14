@@ -4,7 +4,7 @@ from rest_framework.generics import GenericAPIView
 from apps.common.exceptions import success_response
 from apps.common.permissions import IsReceiver
 from apps.common.schema import enveloped_schema
-from apps.donations import services
+from apps.donations import receiver_services
 from apps.donations.serializers import (
     FoodBrowseItemSerializer,
     FoodDetailSerializer,
@@ -32,7 +32,7 @@ class BrowseFoodView(GenericAPIView):
     def get(self, request):
         serializer = self.get_serializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
-        data = services.browse_food(**serializer.validated_data)
+        data = receiver_services.browse_food(**serializer.validated_data)
         return success_response(data)
 
 
@@ -58,7 +58,7 @@ class SearchFoodView(GenericAPIView):
         serializer = self.get_serializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         validated = serializer.validated_data
-        data = services.search_food(
+        data = receiver_services.search_food(
             lat=validated["lat"],
             lng=validated["lng"],
             radius_km=validated.get("radius_km"),
@@ -84,7 +84,7 @@ class FoodDetailView(GenericAPIView):
     def get(self, request, food_id):
         serializer = self.get_serializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
-        data = services.get_food_detail(
+        data = receiver_services.get_food_detail(
             food_id=str(food_id),
             lat=serializer.validated_data["lat"],
             lng=serializer.validated_data["lng"],
