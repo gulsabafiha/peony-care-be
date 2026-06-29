@@ -23,6 +23,7 @@ def enveloped_schema(data_serializer, envelope_name: str, *alt_serializers, many
         name=envelope_name,
         fields={
             "status": serializers.CharField(default="success"),
+            "message": serializers.CharField(required=False, allow_null=True),
             "data": data_field,
             "error": serializers.CharField(allow_null=True, default=None),
             "timestamp": serializers.DateTimeField(),

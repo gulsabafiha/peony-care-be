@@ -19,16 +19,16 @@ class PeonyAPIException(Exception):
         super().__init__(message)
 
 
-def success_response(data, status_code=status.HTTP_200_OK) -> Response:
-    return Response(
-        {
-            "status": "success",
-            "data": data,
-            "error": None,
-            "timestamp": timezone.now().isoformat(),
-        },
-        status=status_code,
-    )
+def success_response(data, status_code=status.HTTP_200_OK, message: str | None = None) -> Response:
+    body = {
+        "status": "success",
+        "data": data,
+        "error": None,
+        "timestamp": timezone.now().isoformat(),
+    }
+    if message is not None:
+        body["message"] = message
+    return Response(body, status=status_code)
 
 
 def error_response(

@@ -26,6 +26,7 @@ class OtpSendView(APIView):
     @extend_schema(
         tags=["Auth"],
         summary="Send OTP",
+        description="OTP expires after 1 minute.",
         request=OtpSendSerializer,
         responses={200: enveloped_schema(OtpSendResponseSerializer, "OtpSendEnvelope")},
     )

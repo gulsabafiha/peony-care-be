@@ -57,3 +57,59 @@ class RestaurantBrowseItemSerializer(serializers.Serializer):
     is_verified = serializers.BooleanField()
     distance_km = serializers.FloatField()
     active_meal_count = serializers.IntegerField()
+
+
+class RestaurantMealSummarySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    description = serializers.CharField()
+    category = serializers.CharField()
+    photo_url = serializers.CharField(allow_null=True)
+    quantity_available = serializers.IntegerField()
+    pickup_start = serializers.CharField()
+    pickup_end = serializers.CharField()
+    pickup_window = serializers.CharField()
+    sponsorship_type = serializers.CharField()
+    sponsor_display_name = serializers.CharField(allow_null=True)
+
+
+class ReceiverRestaurantDetailSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    address = serializers.CharField()
+    postal_code = serializers.CharField()
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+    photo_url = serializers.CharField(allow_null=True)
+    about = serializers.CharField()
+    opening_hours = serializers.CharField()
+    contact_phone = serializers.CharField()
+    is_verified = serializers.BooleanField()
+    distance_km = serializers.FloatField()
+    active_meal_count = serializers.IntegerField()
+    categories = serializers.ListField(child=serializers.CharField())
+    available_meals = RestaurantMealSummarySerializer(many=True)
+
+
+class SubmitFoodReportSerializer(serializers.Serializer):
+    reason_id = serializers.UUIDField()
+    comment = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class FoodReportReasonSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    code = serializers.CharField()
+    label = serializers.CharField()
+
+
+class FoodReportResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    food_id = serializers.UUIDField()
+    food_name = serializers.CharField()
+    restaurant_id = serializers.UUIDField()
+    restaurant_name = serializers.CharField()
+    reason_id = serializers.UUIDField()
+    reason_code = serializers.CharField()
+    reason_label = serializers.CharField()
+    comment = serializers.CharField()
+    created_at = serializers.CharField()

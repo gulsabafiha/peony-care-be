@@ -2,7 +2,6 @@ import uuid
 
 from django.db import models
 
-from apps.accounts.models import DonorProfile, RestaurantProfile
 from apps.common.choices import (
     ClosedReason,
     FoodCategory,
@@ -10,6 +9,7 @@ from apps.common.choices import (
     ListStatus,
     SponsorshipType,
 )
+from apps.accounts.models import DonorProfile, RestaurantProfile, User
 
 
 class FoodItem(models.Model):
@@ -69,6 +69,60 @@ class FoodItem(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class FoodReportReasonOption(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.SlugField(max_length=50, unique=True)
+    label = models.CharField(max_length=200)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "food_report_reason_options"
+        ordering = ["sort_order", "label"]
+
+    def __str__(self) -> str:
+        return self.label
+
+
+class FoodReport(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reporter = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="food_reports",
+    )
+    food_item = models.ForeignKey(
+        FoodItem,
+        on_delete=models.CASCADE,
+        related_name="reports",
+    )
+    restaurant = models.ForeignKey(
+        RestaurantProfile,
+        on_delete=models.CASCADE,
+        related_name="food_reports",
+    )
+    reason_option = models.ForeignKey(
+        FoodReportReasonOption,
+        on_delete=models.PROTECT,
+        related_name="reports",
+    )
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "food_reports"
+        indexes = [
+            models.Index(fields=["restaurant", "created_at"]),
+            models.Index(fields=["food_item", "created_at"]),
+            models.Index(fields=["reporter", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Report on {self.food_item.name} by {self.reporter_id}"
 
 
 class MenuItem(models.Model):

@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -26,7 +27,7 @@ def _create_otp(phone: str = PHONE, purpose: str = OtpPurpose.REGISTER, code: st
         phone_e164=phone,
         code_hash=_hash_value(code),
         purpose=purpose,
-        expires_at=timezone.now() + timedelta(minutes=10),
+        expires_at=timezone.now() + timedelta(minutes=settings.OTP_EXPIRY_MINUTES),
     )
 
 

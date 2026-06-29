@@ -62,6 +62,21 @@ def restaurant_profile():
 
 
 @pytest.fixture
+def report_reason():
+    from apps.donations.models import FoodReportReasonOption
+
+    option, _ = FoodReportReasonOption.objects.get_or_create(
+        code="unsafe-or-spoiled",
+        defaults={
+            "label": "Food was unsafe or spoiled",
+            "sort_order": 1,
+            "is_active": True,
+        },
+    )
+    return option
+
+
+@pytest.fixture
 def food_item(restaurant_profile):
     now = timezone.now()
     food = FoodItem.objects.create(
@@ -179,6 +194,74 @@ class TestBrowseAndSearch:
         assert data[0]["name"] == "Tian Tian Hainanese"
         assert data[0]["active_meal_count"] == 1
         assert data[0]["distance_km"] == 0.0
+
+    def test_restaurant_detail(self, api_client, receiver_user, restaurant_profile, food_item):
+        client = auth_client(api_client, receiver_user)
+        response = client.get(
+            reverse(
+                "receiver_donations:receiver-restaurant-detail",
+                kwargs={"restaurant_id": restaurant_profile.id},
+            ),
+            {"lat": LAT, "lng": LNG},
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["name"] == "Tian Tian Hainanese"
+        assert data["distance_km"] == 0.0
+        assert data["active_meal_count"] == 1
+        assert data["categories"] == ["Rice"]
+        assert len(data["available_meals"]) == 1
+        meal = data["available_meals"][0]
+        assert meal["name"] == "Chicken Rice"
+        assert meal["quantity_available"] == 5
+        assert meal["sponsorship_type"] == "DIRECT"
+
+    def test_restaurant_detail_not_found(self, api_client, receiver_user):
+        client = auth_client(api_client, receiver_user)
+        response = client.get(
+            reverse(
+                "receiver_donations:receiver-restaurant-detail",
+                kwargs={"restaurant_id": "00000000-0000-0000-0000-000000000001"},
+            ),
+            {"lat": LAT, "lng": LNG},
+        )
+        assert response.status_code == 404
+
+    def test_submit_food_report(self, api_client, receiver_user, food_item, report_reason):
+        client = auth_client(api_client, receiver_user)
+        response = client.post(
+            reverse(
+                "receiver_donations:receiver-food-report",
+                kwargs={"food_id": food_item.id},
+            ),
+            {
+                "reason_id": str(report_reason.id),
+                "comment": "Food smelled bad on pickup.",
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["food_name"] == "Chicken Rice"
+        assert data["restaurant_name"] == "Tian Tian Hainanese"
+        assert data["reason_id"] == str(report_reason.id)
+        assert data["reason_code"] == "unsafe-or-spoiled"
+        assert data["reason_label"] == "Food was unsafe or spoiled"
+        assert "confidential" in response.json()["message"].lower()
+
+        from apps.donations.models import FoodReport
+
+        assert FoodReport.objects.filter(reporter=receiver_user).count() == 1
+
+    def test_list_food_report_reasons(self, api_client, receiver_user, report_reason):
+        client = auth_client(api_client, receiver_user)
+        response = client.get(reverse("receiver_donations:receiver-report-reasons"))
+        assert response.status_code == 200
+        reasons = response.json()["data"]
+        assert len(reasons) >= 1
+        assert reasons[0]["id"] == str(report_reason.id)
+        assert reasons[0]["code"] == "unsafe-or-spoiled"
+        assert "label" in reasons[0]
 
 
 class TestClaims:
