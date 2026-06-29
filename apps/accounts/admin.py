@@ -3,6 +3,7 @@ from django.contrib import admin
 from apps.accounts.models import (
     DonorProfile,
     OtpChallenge,
+    ReceiverDataExport,
     ReceiverLocationHistory,
     ReceiverProfile,
     RefreshToken,
@@ -49,6 +50,13 @@ class ReceiverLocationHistoryAdmin(admin.ModelAdmin):
     list_display = ("place_name", "receiver", "place_type", "visited_at")
     list_filter = ("place_type",)
     search_fields = ("place_name", "area_label", "receiver__phone_e164")
+
+
+@admin.register(ReceiverDataExport)
+class ReceiverDataExportAdmin(admin.ModelAdmin):
+    list_display = ("user", "phone_e164", "status", "requested_at", "completed_at")
+    list_filter = ("status",)
+    search_fields = ("user__phone_e164", "phone_e164")
 
 
 @admin.register(RestaurantProfile)

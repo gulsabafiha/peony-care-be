@@ -495,3 +495,55 @@ class TestReceiverLocationSettings:
 
         response = client.get(reverse("receiver_accounts:receiver-location-settings"))
         assert response.json()["data"]["recent_places_count"] == 0
+
+
+class TestReceiverAccount:
+    def test_request_data_export(self, api_client, receiver_user):
+        client = auth_client(api_client, receiver_user)
+        response = client.post(
+            reverse("receiver_accounts:receiver-data-export"),
+            {},
+            format="json",
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["data"]["phone_e164"] == receiver_user.phone_e164
+        assert body["data"]["format"] == "pdf"
+        assert "download_url" in body["data"]
+        assert "download" in body["message"].lower()
+
+        from apps.accounts.models import ReceiverDataExport
+
+        assert ReceiverDataExport.objects.filter(user=receiver_user).count() == 1
+
+    def test_download_data_export_pdf(self, api_client, receiver_user):
+        client = auth_client(api_client, receiver_user)
+        response = client.get(reverse("receiver_accounts:receiver-data-export-download"))
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"
+        assert response.content.startswith(b"%PDF")
+        assert "peonycare-my-data.pdf" in response["Content-Disposition"]
+
+    def test_delete_account_requires_confirmation(self, api_client, receiver_user):
+        client = auth_client(api_client, receiver_user)
+        response = client.post(
+            reverse("receiver_accounts:receiver-account-delete"),
+            {"confirmation": "WRONG"},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "INVALID_CONFIRMATION"
+
+    def test_delete_account(self, api_client, receiver_user):
+        from apps.accounts.models import User
+
+        client = auth_client(api_client, receiver_user)
+        phone = receiver_user.phone_e164
+        response = client.post(
+            reverse("receiver_accounts:receiver-account-delete"),
+            {"confirmation": "DELETE"},
+            format="json",
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["deleted"] is True
+        assert not User.objects.filter(phone_e164=phone).exists()

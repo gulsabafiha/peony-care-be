@@ -11,3 +11,4 @@ boto3>=1.35
 whitenoise>=6.8
 drf-spectacular>=0.28
 phonenumbers>=8.13
+reportlab>=4.0

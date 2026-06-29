@@ -116,6 +116,35 @@ class ReceiverLocationHistory(models.Model):
         return f"{self.place_name} ({self.receiver_id})"
 
 
+class ReceiverDataExport(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        COMPLETED = "COMPLETED", "Completed"
+        FAILED = "FAILED", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="data_exports",
+    )
+    phone_e164 = models.CharField(max_length=20)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    file_path = models.CharField(max_length=500, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "receiver_data_exports"
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["user", "requested_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"DataExport({self.user_id}, {self.status})"
+
+
 class RestaurantProfile(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="restaurant_profile")
