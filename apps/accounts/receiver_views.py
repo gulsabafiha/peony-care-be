@@ -40,7 +40,7 @@ class ReceiverProfileView(GenericAPIView):
         serializer.is_valid(raise_exception=True)
         data = receiver_services.update_receiver_profile(
             request.user,
-            display_name=serializer.validated_data["display_name"],
+            serializer.validated_data,
         )
         return success_response(data)
 

@@ -84,7 +84,7 @@ class TestRestaurantDonations:
         assert list_response.status_code == 200
         assert len(list_response.json()["data"]) == 1
 
-    def test_unapproved_restaurant_cannot_post(self, api_client):
+    def test_restaurant_can_post_without_admin_approval(self, api_client):
         user = User.objects.create_user(
             phone_e164="+6593333333",
             role=UserRole.RESTAURANT,
@@ -114,8 +114,8 @@ class TestRestaurantDonations:
             },
             format="json",
         )
-        assert response.status_code == 403
-        assert response.json()["error"]["code"] == "RESTAURANT_NOT_APPROVED"
+        assert response.status_code == 201
+        assert response.json()["data"]["name"] == "Noodles"
 
     def test_close_reactivate_delete_flow(self, api_client, restaurant_user):
         client = auth_client(api_client, restaurant_user)

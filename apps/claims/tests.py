@@ -31,7 +31,12 @@ def receiver_user():
         role=UserRole.RECEIVER,
         is_active=True,
     )
-    ReceiverProfile.objects.create(user=user, display_name="Sarah Mun")
+    ReceiverProfile.objects.create(
+        user=user,
+        display_name="Sarah Mun",
+        latitude=LAT,
+        longitude=LNG,
+    )
     return user
 
 
@@ -115,6 +120,65 @@ class TestBrowseAndSearch:
         assert response.status_code == 200
         detail = response.json()["data"]
         assert detail["claim_progress"]["remaining"] == 5
+
+    def test_browse_uses_profile_location_by_default(self, api_client, receiver_user, food_item):
+        client = auth_client(api_client, receiver_user)
+        response = client.get(reverse("receiver_donations:receiver-browse"))
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert len(data) == 1
+        assert data[0]["name"] == "Chicken Rice"
+
+    def test_browse_uses_profile_radius_by_default(
+        self, api_client, receiver_user, restaurant_profile, food_item
+    ):
+        client = auth_client(api_client, receiver_user)
+        receiver_user.receiver_profile.browse_radius_km = 1.0
+        receiver_user.receiver_profile.save(update_fields=["browse_radius_km"])
+
+        far_user = User.objects.create_user(
+            phone_e164="+6593333333",
+            role=UserRole.RESTAURANT,
+            is_active=True,
+        )
+        far_restaurant = RestaurantProfile.objects.create(
+            user=far_user,
+            name="Far Restaurant",
+            uen="200912345C",
+            address="Far away",
+            postal_code="888888",
+            latitude=1.4,
+            longitude=104.0,
+            contact_name="Owner",
+            is_approved=True,
+        )
+        now = timezone.now()
+        FoodItem.objects.create(
+            restaurant=far_restaurant,
+            name="Far Meal",
+            category="RICE",
+            quantity_original=2,
+            quantity_available=2,
+            pickup_start=now,
+            pickup_end=now + timedelta(hours=2),
+            list_status=ListStatus.ACTIVE,
+        )
+
+        response = client.get(reverse("receiver_donations:receiver-browse"))
+        assert response.status_code == 200
+        names = [item["name"] for item in response.json()["data"]]
+        assert "Chicken Rice" in names
+        assert "Far Meal" not in names
+
+    def test_browse_restaurants(self, api_client, receiver_user, food_item):
+        client = auth_client(api_client, receiver_user)
+        response = client.get(reverse("receiver_donations:receiver-restaurants-browse"))
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert len(data) == 1
+        assert data[0]["name"] == "Tian Tian Hainanese"
+        assert data[0]["active_meal_count"] == 1
+        assert data[0]["distance_km"] == 0.0
 
 
 class TestClaims:
@@ -235,11 +299,20 @@ class TestReceiverProfile:
 
         response = client.patch(
             reverse("receiver_accounts:receiver-profile"),
-            {"display_name": "Sarah T."},
+            {
+                "display_name": "Sarah T.",
+                "latitude": 1.3,
+                "longitude": 103.9,
+                "browse_radius_km": 10,
+            },
             format="json",
         )
         assert response.status_code == 200
-        assert response.json()["data"]["display_name"] == "Sarah T."
+        profile = response.json()["data"]
+        assert profile["display_name"] == "Sarah T."
+        assert profile["latitude"] == 1.3
+        assert profile["longitude"] == 103.9
+        assert profile["browse_radius_km"] == 10
 
     def test_stats(self, api_client, receiver_user, food_item):
         client = auth_client(api_client, receiver_user)

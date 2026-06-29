@@ -1,3 +1,4 @@
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.generics import GenericAPIView
 
@@ -31,9 +32,11 @@ class DashboardView(GenericAPIView):
 
 class DonationListCreateView(GenericAPIView):
     permission_classes = [IsRestaurant]
+    serializer_class = CreateDonationSerializer
 
     @extend_schema(
         tags=["Restaurant"],
+        operation_id="v1_restaurant_donations_list",
         summary="List donations by status",
         parameters=[
             OpenApiParameter(
@@ -71,9 +74,11 @@ class DonationListCreateView(GenericAPIView):
 
 class DonationDetailView(GenericAPIView):
     permission_classes = [IsRestaurant]
+    serializer_class = UpdateDonationSerializer
 
     @extend_schema(
         tags=["Restaurant"],
+        operation_id="v1_restaurant_donations_retrieve",
         summary="Donation detail with claims",
         responses={200: enveloped_schema(RestaurantDonationSerializer, "DonationDetailEnvelope")},
     )
@@ -109,10 +114,12 @@ class DonationDetailView(GenericAPIView):
 
 class DonationCloseView(GenericAPIView):
     permission_classes = [IsRestaurant]
+    serializer_class = RestaurantDonationSerializer
 
     @extend_schema(
         tags=["Restaurant"],
         summary="Close donation early",
+        request=OpenApiTypes.NONE,
         responses={200: enveloped_schema(RestaurantDonationSerializer, "CloseDonationEnvelope")},
     )
     def post(self, request, food_id):
@@ -122,10 +129,12 @@ class DonationCloseView(GenericAPIView):
 
 class DonationReactivateView(GenericAPIView):
     permission_classes = [IsRestaurant]
+    serializer_class = RestaurantDonationSerializer
 
     @extend_schema(
         tags=["Restaurant"],
         summary="Reactivate inactive donation",
+        request=OpenApiTypes.NONE,
         responses={
             200: enveloped_schema(RestaurantDonationSerializer, "ReactivateDonationEnvelope")
         },
@@ -140,7 +149,7 @@ class ApprovalStatusView(GenericAPIView):
 
     @extend_schema(
         tags=["Restaurant"],
-        summary="Approval pending status",
+        summary="Restaurant activation status",
         responses={200: enveloped_schema(ApprovalStatusSerializer, "ApprovalStatusEnvelope")},
     )
     def get(self, request):

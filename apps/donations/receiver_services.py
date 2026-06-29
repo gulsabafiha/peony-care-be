@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 
+from apps.accounts.models import RestaurantProfile
 from apps.common.choices import FoodStatus, ListStatus
 from apps.common.exceptions import PeonyAPIException
 from apps.common.geo import haversine_distance_m
@@ -18,7 +19,6 @@ def _base_available_queryset():
             list_status=ListStatus.ACTIVE,
             quantity_available__gt=0,
             pickup_end__gt=now,
-            restaurant__is_approved=True,
         )
         .exclude(status=FoodStatus.EXPIRED)
     )
@@ -83,6 +83,74 @@ def _filter_by_radius(queryset, lat: float, lng: float, radius_km: float):
 
     results.sort(key=lambda item: item[0])
     return [item[1] for item in results]
+
+
+def _active_meal_count_filter(now):
+    return Q(
+        food_items__list_status=ListStatus.ACTIVE,
+        food_items__quantity_available__gt=0,
+        food_items__pickup_end__gt=now,
+    ) & ~Q(food_items__status=FoodStatus.EXPIRED)
+
+
+def _filter_restaurants_by_radius(queryset, lat: float, lng: float, radius_km: float):
+    min_lat, max_lat, min_lng, max_lng = bounding_box(lat, lng, radius_km)
+    queryset = queryset.filter(
+        latitude__gte=min_lat,
+        latitude__lte=max_lat,
+        longitude__gte=min_lng,
+        longitude__lte=max_lng,
+    )
+
+    results = []
+    radius_m = radius_km * 1000
+    for restaurant in queryset:
+        distance_m = haversine_distance_m(
+            lat,
+            lng,
+            float(restaurant.latitude),
+            float(restaurant.longitude),
+        )
+        if distance_m <= radius_m:
+            results.append((distance_m, restaurant))
+
+    results.sort(key=lambda item: item[0])
+    return [item[1] for item in results]
+
+
+def _serialize_restaurant_browse(
+    restaurant: RestaurantProfile,
+    receiver_lat: float,
+    receiver_lng: float,
+) -> dict:
+    distance_m = haversine_distance_m(
+        receiver_lat,
+        receiver_lng,
+        float(restaurant.latitude),
+        float(restaurant.longitude),
+    )
+    return {
+        "id": str(restaurant.id),
+        "name": restaurant.name,
+        "address": restaurant.address,
+        "postal_code": restaurant.postal_code,
+        "latitude": float(restaurant.latitude),
+        "longitude": float(restaurant.longitude),
+        "photo_url": restaurant.photo_url or None,
+        "is_verified": restaurant.is_verified,
+        "distance_km": round(distance_m / 1000, 1),
+        "active_meal_count": restaurant.active_meal_count,
+    }
+
+
+def browse_restaurants(lat: float, lng: float, radius_km: float | None = None) -> list[dict]:
+    radius = radius_km or settings.DEFAULT_BROWSE_RADIUS_KM
+    now = now_sgt()
+    queryset = RestaurantProfile.objects.annotate(
+        active_meal_count=Count("food_items", filter=_active_meal_count_filter(now)),
+    )
+    restaurants = _filter_restaurants_by_radius(queryset, lat, lng, radius)
+    return [_serialize_restaurant_browse(restaurant, lat, lng) for restaurant in restaurants]
 
 
 def browse_food(lat: float, lng: float, radius_km: float | None = None) -> list[dict]:

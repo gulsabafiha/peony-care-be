@@ -246,13 +246,13 @@ def _serialize_restaurant_browse(restaurant: RestaurantProfile) -> dict:
 
 
 def list_restaurants() -> list[dict]:
-    restaurants = RestaurantProfile.objects.filter(is_approved=True).order_by("name")
+    restaurants = RestaurantProfile.objects.order_by("name")
     return [_serialize_restaurant_browse(restaurant) for restaurant in restaurants]
 
 
 def get_restaurant_menu(restaurant_id: str) -> dict:
     try:
-        restaurant = RestaurantProfile.objects.get(id=restaurant_id, is_approved=True)
+        restaurant = RestaurantProfile.objects.get(id=restaurant_id)
     except RestaurantProfile.DoesNotExist as exc:
         raise PeonyAPIException(
             code="RESTAURANT_NOT_FOUND",
@@ -309,14 +309,11 @@ def _build_food_name(order_items: list[MealOrderItem]) -> str:
 def create_meal_order(user: User, data: dict) -> dict:
     donor = get_donor_profile(user)
     try:
-        restaurant = RestaurantProfile.objects.get(
-            id=data["restaurant_id"],
-            is_approved=True,
-        )
+        restaurant = RestaurantProfile.objects.get(id=data["restaurant_id"])
     except RestaurantProfile.DoesNotExist as exc:
         raise PeonyAPIException(
             code="RESTAURANT_NOT_FOUND",
-            message="Restaurant not found or not approved.",
+            message="Restaurant not found.",
             http_status=404,
         ) from exc
 

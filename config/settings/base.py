@@ -144,12 +144,20 @@ SPECTACULAR_SETTINGS = {
         "persistAuthorization": True,
         "displayOperationId": True,
     },
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "apps.common.schema.add_standard_error_response",
+    ],
     "APPEND_COMPONENTS": {
         "securitySchemes": {
             "BearerAuth": {
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
+                "description": (
+                    "Paste only the JWT access token. Do not include 'Bearer'; "
+                    "Swagger UI adds it automatically."
+                ),
             },
             "RegistrationToken": {
                 "type": "apiKey",

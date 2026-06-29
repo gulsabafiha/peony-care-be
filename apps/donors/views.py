@@ -1,3 +1,4 @@
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework.generics import GenericAPIView
 
@@ -10,8 +11,15 @@ from apps.donors.serializers import (
     CreateMoneyDonationSerializer,
     CreditPreferenceSerializer,
     DonorDashboardSerializer,
+    DonorHistoryItemSerializer,
+    DonorImpactSerializer,
     DonorProfileSerializer,
     DonorProfileUpdateSerializer,
+    MealOrderResponseSerializer,
+    MoneyDonationResponseSerializer,
+    MoneyDonationTransferSerializer,
+    RestaurantBrowseSerializer,
+    RestaurantMenuSerializer,
 )
 
 
@@ -29,10 +37,14 @@ class DashboardView(GenericAPIView):
 
 class HistoryView(GenericAPIView):
     permission_classes = [IsDonor]
+    serializer_class = DonorHistoryItemSerializer
 
     @extend_schema(
         tags=["Donor"],
         summary="Donation history (meals and money)",
+        responses={
+            200: enveloped_schema(DonorHistoryItemSerializer, "DonorHistoryEnvelope", many=True)
+        },
     )
     def get(self, request):
         return success_response(services.get_history(request.user))
@@ -40,10 +52,12 @@ class HistoryView(GenericAPIView):
 
 class ImpactView(GenericAPIView):
     permission_classes = [IsDonor]
+    serializer_class = DonorImpactSerializer
 
     @extend_schema(
         tags=["Donor"],
         summary="Impact stats and monthly chart data",
+        responses={200: enveloped_schema(DonorImpactSerializer, "DonorImpactEnvelope")},
     )
     def get(self, request):
         return success_response(services.get_impact(request.user))
@@ -104,10 +118,16 @@ class DonorProfileView(GenericAPIView):
 
 class RestaurantBrowseView(GenericAPIView):
     permission_classes = [IsDonor]
+    serializer_class = RestaurantBrowseSerializer
 
     @extend_schema(
         tags=["Donor"],
-        summary="Browse approved restaurants to sponsor",
+        summary="Browse restaurants to sponsor",
+        responses={
+            200: enveloped_schema(
+                RestaurantBrowseSerializer, "DonorRestaurantBrowseEnvelope", many=True
+            )
+        },
     )
     def get(self, request):
         return success_response(services.list_restaurants())
@@ -115,10 +135,12 @@ class RestaurantBrowseView(GenericAPIView):
 
 class RestaurantMenuView(GenericAPIView):
     permission_classes = [IsDonor]
+    serializer_class = RestaurantMenuSerializer
 
     @extend_schema(
         tags=["Donor"],
         summary="Admin-managed menu for a restaurant",
+        responses={200: enveloped_schema(RestaurantMenuSerializer, "DonorRestaurantMenuEnvelope")},
     )
     def get(self, request, restaurant_id):
         return success_response(services.get_restaurant_menu(str(restaurant_id)))
@@ -126,11 +148,13 @@ class RestaurantMenuView(GenericAPIView):
 
 class MealOrderCreateView(GenericAPIView):
     permission_classes = [IsDonor]
+    serializer_class = CreateMealOrderSerializer
 
     @extend_schema(
         tags=["Donor"],
         summary="Place meal order and auto-post sponsored food listing",
         request=CreateMealOrderSerializer,
+        responses={201: enveloped_schema(MealOrderResponseSerializer, "MealOrderCreateEnvelope")},
     )
     def post(self, request):
         serializer = CreateMealOrderSerializer(data=request.data)
@@ -141,11 +165,15 @@ class MealOrderCreateView(GenericAPIView):
 
 class MoneyDonationCreateView(GenericAPIView):
     permission_classes = [IsDonor]
+    serializer_class = CreateMoneyDonationSerializer
 
     @extend_schema(
         tags=["Donor"],
         summary="Create money donation with PayNow reference",
         request=CreateMoneyDonationSerializer,
+        responses={
+            201: enveloped_schema(MoneyDonationResponseSerializer, "MoneyDonationCreateEnvelope")
+        },
     )
     def post(self, request):
         serializer = CreateMoneyDonationSerializer(data=request.data)
@@ -156,10 +184,15 @@ class MoneyDonationCreateView(GenericAPIView):
 
 class MoneyDonationConfirmTransferView(GenericAPIView):
     permission_classes = [IsDonor]
+    serializer_class = MoneyDonationTransferSerializer
 
     @extend_schema(
         tags=["Donor"],
         summary="Mark PayNow transfer as sent",
+        request=OpenApiTypes.NONE,
+        responses={
+            200: enveloped_schema(MoneyDonationTransferSerializer, "MoneyDonationTransferEnvelope")
+        },
     )
     def post(self, request, donation_id):
         data = services.confirm_money_transfer(request.user, str(donation_id))

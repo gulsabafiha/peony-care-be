@@ -42,13 +42,6 @@ class RestaurantProfileAdmin(admin.ModelAdmin):
     list_display = ("name", "uen", "is_approved", "is_verified", "total_food_shared")
     list_filter = ("is_approved", "is_verified")
     search_fields = ("name", "uen", "user__phone_e164")
-    actions = ["approve_restaurants"]
-
-    @admin.action(description="Approve selected restaurants")
-    def approve_restaurants(self, request, queryset):
-        from django.utils import timezone
-
-        queryset.update(is_approved=True, approved_at=timezone.now())
 
 
 @admin.register(DonorProfile)

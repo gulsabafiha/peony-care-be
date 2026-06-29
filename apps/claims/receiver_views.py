@@ -32,6 +32,7 @@ class ClaimsView(GenericAPIView):
 
     @extend_schema(
         tags=["Receiver"],
+        operation_id="v1_receiver_claims_list",
         summary="Claim history",
         responses={
             200: enveloped_schema(ClaimHistoryItemSerializer, "ClaimHistoryEnvelope", many=True)
@@ -59,6 +60,7 @@ class ClaimDetailView(GenericAPIView):
 
     @extend_schema(
         tags=["Receiver"],
+        operation_id="v1_receiver_claims_retrieve",
         summary="Single claim detail",
         responses={200: enveloped_schema(ClaimResponseSerializer, "ClaimDetailEnvelope")},
     )

@@ -4,9 +4,16 @@ from apps.common.choices import FoodCategory
 
 
 class LocationQuerySerializer(serializers.Serializer):
-    lat = serializers.FloatField()
-    lng = serializers.FloatField()
+    lat = serializers.FloatField(required=False)
+    lng = serializers.FloatField(required=False)
     radius_km = serializers.FloatField(required=False, min_value=0.1, max_value=50)
+
+    def validate(self, data):
+        lat = data.get("lat")
+        lng = data.get("lng")
+        if (lat is None) != (lng is None):
+            raise serializers.ValidationError("lat and lng must be provided together.")
+        return data
 
 
 class SearchQuerySerializer(LocationQuerySerializer):
@@ -37,3 +44,16 @@ class ClaimProgressSerializer(serializers.Serializer):
 
 class FoodDetailSerializer(FoodBrowseItemSerializer):
     claim_progress = ClaimProgressSerializer()
+
+
+class RestaurantBrowseItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    address = serializers.CharField()
+    postal_code = serializers.CharField()
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+    photo_url = serializers.CharField(allow_null=True)
+    is_verified = serializers.BooleanField()
+    distance_km = serializers.FloatField()
+    active_meal_count = serializers.IntegerField()

@@ -15,6 +15,8 @@ class OtpVerifySerializer(serializers.Serializer):
 
 class ReceiverRegisterSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=100)
+    latitude = serializers.FloatField(min_value=-90, max_value=90)
+    longitude = serializers.FloatField(min_value=-180, max_value=180)
 
 
 class RestaurantRegisterSerializer(serializers.Serializer):

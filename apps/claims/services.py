@@ -149,7 +149,6 @@ def create_claim(
         food.list_status != ListStatus.ACTIVE
         or food.quantity_available <= 0
         or food.pickup_end <= now
-        or not food.restaurant.is_approved
     ):
         raise PeonyAPIException(
             code="FOOD_UNAVAILABLE",

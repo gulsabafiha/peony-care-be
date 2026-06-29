@@ -157,12 +157,12 @@ Requires `Authorization: Bearer` and restaurant role.
 |--------|----------|-------------|
 | GET | `dashboard/` | Today's stats and active listings |
 | GET | `donations/?status=active\|past\|inactive` | List donations |
-| POST | `donations/` | Create donation (requires approval) |
+| POST | `donations/` | Create donation |
 | GET/PATCH/DELETE | `donations/{food_id}/` | Detail / update / soft-delete |
 | POST | `donations/{food_id}/close/` | Close listing |
 | POST | `donations/{food_id}/reactivate/` | Re-open closed listing |
 | GET/PATCH | `profile/` | Restaurant profile |
-| GET | `approval-status/` | Pending / approved status |
+| GET | `approval-status/` | Activation status |
 
 **Claims** (`restaurant_claims` namespace)
 
@@ -171,7 +171,7 @@ Requires `Authorization: Bearer` and restaurant role.
 | GET | `claims/today/` | Today's claims board |
 | GET | `donations/{food_id}/claims/` | Claims for one donation |
 
-Unapproved restaurants receive `403 RESTAURANT_NOT_APPROVED` when posting donations. Approve via Django Admin (`restaurant_profiles.is_approved`).
+Restaurants are active immediately after registration and can post donations without Django Admin approval.
 
 ### Public
 
@@ -190,7 +190,7 @@ Requires `Authorization: Bearer` and donor role.
 | GET | `impact/` | Monthly chart data |
 | GET/PATCH | `credit-preference/` | `SHOW_NAME` \| `INITIALS` \| `ANONYMOUS` |
 | GET/PATCH | `profile/` | Name, photo, `contact_email` |
-| GET | `restaurants/` | Browse approved restaurants to sponsor |
+| GET | `restaurants/` | Browse restaurants to sponsor |
 | GET | `restaurants/{id}/menu/` | Admin-managed menu |
 | POST | `meal-orders/` | Meal order → auto-posts sponsored `FoodItem` |
 | POST | `money-donations/` | Create donation + PayNow reference |
@@ -205,12 +205,11 @@ Menu items are managed in Django Admin only (not via restaurant API).
 ## End-to-end dev flow
 
 1. **Register a restaurant** — OTP send → verify → `POST /auth/register/restaurant/` with `Registration-Token`
-2. **Approve restaurant** — Django Admin → `Restaurant profiles` → set `is_approved = True`
-3. **Post a donation** — `POST /api/v1/restaurant/donations/` (QR payload generated automatically)
-4. **Register a receiver** — same OTP flow with `register/receiver/`
-5. **Browse food** — `GET /api/v1/receiver/donations/browse/`
-6. **Claim food** — `POST /api/v1/receiver/claims/` with QR scan payload
-7. **Restaurant views claims** — `GET /api/v1/restaurant/claims/today/`
+2. **Post a donation** — `POST /api/v1/restaurant/donations/` (QR payload generated automatically)
+3. **Register a receiver** — same OTP flow with `register/receiver/`
+4. **Browse food** — `GET /api/v1/receiver/donations/browse/`
+5. **Claim food** — `POST /api/v1/receiver/claims/` with QR scan payload
+6. **Restaurant views claims** — `GET /api/v1/restaurant/claims/today/`
 
 ### Donor flow
 

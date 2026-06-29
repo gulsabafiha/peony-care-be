@@ -222,7 +222,12 @@ def _serialize_user(user: User) -> dict:
 
 
 @transaction.atomic
-def register_receiver(phone_e164: str, display_name: str) -> dict:
+def register_receiver(
+    phone_e164: str,
+    display_name: str,
+    latitude: float,
+    longitude: float,
+) -> dict:
     user = _get_or_create_user(phone_e164, UserRole.RECEIVER)
     if ReceiverProfile.objects.filter(user=user).exists():
         raise PeonyAPIException(
@@ -231,7 +236,12 @@ def register_receiver(phone_e164: str, display_name: str) -> dict:
             http_status=409,
         )
 
-    ReceiverProfile.objects.create(user=user, display_name=display_name)
+    ReceiverProfile.objects.create(
+        user=user,
+        display_name=display_name,
+        latitude=latitude,
+        longitude=longitude,
+    )
     user.is_active = True
     user.save(update_fields=["is_active"])
     return _issue_jwt_response(user)
@@ -261,6 +271,8 @@ def register_restaurant(phone_e164: str, data: dict) -> dict:
         contact_name=data["contact_name"],
         contact_email=data.get("contact_email", ""),
         contact_phone=data.get("contact_phone", phone_e164),
+        is_approved=True,
+        approved_at=timezone.now(),
     )
     user.is_active = True
     user.save(update_fields=["is_active"])

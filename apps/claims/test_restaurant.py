@@ -31,7 +31,12 @@ def receiver_user():
         role=UserRole.RECEIVER,
         is_active=True,
     )
-    ReceiverProfile.objects.create(user=user, display_name="Sarah Mun")
+    ReceiverProfile.objects.create(
+        user=user,
+        display_name="Sarah Mun",
+        latitude=LAT,
+        longitude=LNG,
+    )
     return user
 
 

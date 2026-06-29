@@ -25,15 +25,6 @@ def get_restaurant_profile(user: User) -> RestaurantProfile:
         ) from exc
 
 
-def require_approved(restaurant: RestaurantProfile) -> None:
-    if not restaurant.is_approved:
-        raise PeonyAPIException(
-            code="RESTAURANT_NOT_APPROVED",
-            message="Restaurant must be approved before performing this action.",
-            http_status=403,
-        )
-
-
 def _generate_qr_data(food: FoodItem) -> str:
     return f"{food.id}|{food.restaurant_id}|{int(time.time())}"
 
@@ -122,7 +113,6 @@ def list_donations(user: User, status: str = "active") -> list[dict]:
 @transaction.atomic
 def create_donation(user: User, data: dict) -> dict:
     restaurant = get_restaurant_profile(user)
-    require_approved(restaurant)
 
     now = now_sgt()
     if data["pickup_end"] <= now:
@@ -344,7 +334,7 @@ def update_restaurant_profile_data(user: User, data: dict) -> dict:
 
 def get_public_restaurant(restaurant_id: str) -> dict:
     try:
-        restaurant = RestaurantProfile.objects.get(id=restaurant_id, is_approved=True)
+        restaurant = RestaurantProfile.objects.get(id=restaurant_id)
     except RestaurantProfile.DoesNotExist as exc:
         raise PeonyAPIException(
             code="RESTAURANT_NOT_FOUND",

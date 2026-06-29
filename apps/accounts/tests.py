@@ -53,6 +53,27 @@ class TestOtpSend:
         assert response.json()["error"]["code"] == "USER_NOT_FOUND"
 
 
+class TestUserManager:
+    def test_regular_user_has_unusable_password(self):
+        user = User.objects.create_user(
+            phone_e164=PHONE,
+            role=UserRole.RECEIVER,
+        )
+
+        assert user.has_usable_password() is False
+
+    def test_superuser_password_is_usable(self):
+        user = User.objects.create_superuser(
+            phone_e164="+6598765432",
+            password="StrongTestPass123!",
+        )
+
+        assert user.is_staff is True
+        assert user.is_superuser is True
+        assert user.is_active is True
+        assert user.check_password("StrongTestPass123!") is True
+
+
 class TestOtpVerify:
     @patch("apps.accounts.services._generate_otp_code", return_value=OTP_CODE)
     def test_verify_register_returns_registration_token(self, _mock_code, api_client):
@@ -80,7 +101,12 @@ class TestOtpVerify:
         )
         from apps.accounts.models import ReceiverProfile
 
-        ReceiverProfile.objects.create(user=user, display_name="Sarah")
+        ReceiverProfile.objects.create(
+            user=user,
+            display_name="Sarah",
+            latitude=1.3521,
+            longitude=103.8198,
+        )
 
         api_client.post(
             reverse("auth-otp-send"),
@@ -118,7 +144,11 @@ class TestRegistration:
         token = self._registration_token(api_client)
         response = api_client.post(
             reverse("auth-register-receiver"),
-            {"display_name": "Sarah Mun"},
+            {
+                "display_name": "Sarah Mun",
+                "latitude": 1.3521,
+                "longitude": 103.8198,
+            },
             format="json",
             HTTP_REGISTRATION_TOKEN=token,
         )
@@ -129,6 +159,9 @@ class TestRegistration:
         assert user.role == UserRole.RECEIVER
         assert user.is_active is True
         assert user.receiver_profile.display_name == "Sarah Mun"
+        assert float(user.receiver_profile.latitude) == 1.3521
+        assert float(user.receiver_profile.longitude) == 103.8198
+        assert user.receiver_profile.browse_radius_km == 5.0
 
     def test_register_restaurant(self, api_client):
         token = self._registration_token(api_client)
@@ -147,7 +180,8 @@ class TestRegistration:
         assert response.status_code == 201
         user = User.objects.get(phone_e164=PHONE)
         assert user.restaurant_profile.name == "Tian Tian Hainanese"
-        assert user.restaurant_profile.is_approved is False
+        assert user.restaurant_profile.is_approved is True
+        assert user.restaurant_profile.approved_at is not None
 
     def test_register_donor(self, api_client):
         token = self._registration_token(api_client)
