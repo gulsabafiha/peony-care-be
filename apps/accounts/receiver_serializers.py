@@ -1,16 +1,27 @@
 from rest_framework import serializers
 
 
+class ReceiverProfileStatsSerializer(serializers.Serializer):
+    lifetime_meals = serializers.IntegerField()
+    restaurants_count = serializers.IntegerField()
+    days_active = serializers.IntegerField()
+    meals = serializers.IntegerField()
+    restaurants = serializers.IntegerField()
+    days = serializers.IntegerField()
+
+
 class ReceiverProfileSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     display_name = serializers.CharField()
     phone = serializers.CharField()
+    photo_url = serializers.CharField(allow_null=True)
     latitude = serializers.FloatField(allow_null=True)
     longitude = serializers.FloatField(allow_null=True)
     browse_radius_km = serializers.FloatField()
+    member_since = serializers.CharField()
     total_claims = serializers.IntegerField()
     last_claim_date = serializers.CharField(allow_null=True)
-    stats = serializers.DictField()
+    stats = ReceiverProfileStatsSerializer()
 
 
 class ReceiverProfileUpdateSerializer(serializers.Serializer):
@@ -22,8 +33,14 @@ class ReceiverProfileUpdateSerializer(serializers.Serializer):
         max_value=50,
         required=False,
     )
+    photo = serializers.FileField(required=False)
+    remove_photo = serializers.BooleanField(required=False, default=False)
 
 
 class ReceiverStatsSerializer(serializers.Serializer):
     lifetime_meals = serializers.IntegerField()
     restaurants_count = serializers.IntegerField()
+    days_active = serializers.IntegerField()
+    meals = serializers.IntegerField()
+    restaurants = serializers.IntegerField()
+    days = serializers.IntegerField()

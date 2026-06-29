@@ -303,7 +303,13 @@ def get_receiver_stats(receiver: User) -> dict:
         .distinct()
         .count()
     )
+    member_since = receiver.created_at.astimezone(now_sgt().tzinfo).date()
+    days_active = max(1, (today_sgt() - member_since).days + 1)
     return {
         "lifetime_meals": lifetime_meals,
         "restaurants_count": restaurants_count,
+        "days_active": days_active,
+        "meals": lifetime_meals,
+        "restaurants": restaurants_count,
+        "days": days_active,
     }

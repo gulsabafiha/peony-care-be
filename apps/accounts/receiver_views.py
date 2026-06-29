@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework.generics import GenericAPIView
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 
 from apps.accounts import receiver_services
 from apps.accounts.receiver_serializers import (
@@ -14,6 +15,7 @@ from apps.common.schema import enveloped_schema
 
 class ReceiverProfileView(GenericAPIView):
     permission_classes = [IsReceiver]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(
         tags=["Receiver"],
@@ -21,13 +23,16 @@ class ReceiverProfileView(GenericAPIView):
         responses={200: enveloped_schema(ReceiverProfileSerializer, "ReceiverProfileEnvelope")},
     )
     def get(self, request):
-        data = receiver_services.get_receiver_profile(request.user)
+        data = receiver_services.get_receiver_profile(request.user, request=request)
         return success_response(data)
 
     @extend_schema(
         tags=["Receiver"],
         summary="Update receiver profile",
-        request=ReceiverProfileUpdateSerializer,
+        request={
+            "multipart/form-data": ReceiverProfileUpdateSerializer,
+            "application/json": ReceiverProfileUpdateSerializer,
+        },
         responses={
             200: enveloped_schema(
                 ReceiverProfileSerializer,
@@ -41,6 +46,7 @@ class ReceiverProfileView(GenericAPIView):
         data = receiver_services.update_receiver_profile(
             request.user,
             serializer.validated_data,
+            request=request,
         )
         return success_response(data)
 

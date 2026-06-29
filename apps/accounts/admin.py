@@ -3,6 +3,7 @@ from django.contrib import admin
 from apps.accounts.models import (
     DonorProfile,
     OtpChallenge,
+    ReceiverLocationHistory,
     ReceiverProfile,
     RefreshToken,
     RestaurantProfile,
@@ -33,8 +34,21 @@ class RefreshTokenAdmin(admin.ModelAdmin):
 
 @admin.register(ReceiverProfile)
 class ReceiverProfileAdmin(admin.ModelAdmin):
-    list_display = ("display_name", "user", "total_claims", "last_claim_date")
+    list_display = (
+        "display_name",
+        "user",
+        "browse_radius_km",
+        "location_services_enabled",
+        "total_claims",
+    )
     search_fields = ("display_name", "user__phone_e164")
+
+
+@admin.register(ReceiverLocationHistory)
+class ReceiverLocationHistoryAdmin(admin.ModelAdmin):
+    list_display = ("place_name", "receiver", "place_type", "visited_at")
+    list_filter = ("place_type",)
+    search_fields = ("place_name", "area_label", "receiver__phone_e164")
 
 
 @admin.register(RestaurantProfile)

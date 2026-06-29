@@ -4,7 +4,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 
 from apps.accounts.managers import UserManager
-from apps.common.choices import CreditPreference, OtpPurpose, UserRole
+from apps.common.choices import CreditPreference, LocationPlaceType, OtpPurpose, UserRole
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -73,6 +73,9 @@ class ReceiverProfile(models.Model):
     latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     browse_radius_km = models.FloatField(default=5.0)
+    location_services_enabled = models.BooleanField(default=True)
+    save_location_history = models.BooleanField(default=True)
+    photo_url = models.URLField(max_length=500, blank=True)
     total_claims = models.IntegerField(default=0)
     last_claim_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -82,6 +85,35 @@ class ReceiverProfile(models.Model):
 
     def __str__(self) -> str:
         return self.display_name
+
+
+class ReceiverLocationHistory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    receiver = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="location_history",
+    )
+    place_name = models.CharField(max_length=200)
+    area_label = models.CharField(max_length=300)
+    place_type = models.CharField(
+        max_length=20,
+        choices=LocationPlaceType.choices,
+        default=LocationPlaceType.OTHER,
+    )
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+    visited_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "receiver_location_history"
+        ordering = ["-visited_at"]
+        indexes = [
+            models.Index(fields=["receiver", "visited_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.place_name} ({self.receiver_id})"
 
 
 class RestaurantProfile(models.Model):

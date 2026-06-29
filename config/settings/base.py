@@ -83,7 +83,12 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
@@ -115,6 +120,7 @@ SIMPLE_JWT = {
 MAX_CLAIM_DISTANCE_M = config("MAX_CLAIM_DISTANCE_M", default=500, cast=int)
 DAILY_CLAIM_LIMIT = config("DAILY_CLAIM_LIMIT", default=1, cast=int)
 DEFAULT_BROWSE_RADIUS_KM = config("DEFAULT_BROWSE_RADIUS_KM", default=5, cast=int)
+MAX_PROFILE_PHOTO_BYTES = config("MAX_PROFILE_PHOTO_BYTES", default=5 * 1024 * 1024, cast=int)
 
 # AWS / OTP (configured per environment)
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")

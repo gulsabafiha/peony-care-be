@@ -67,3 +67,13 @@ class ClosedReason(models.TextChoices):
     MANUAL = "MANUAL", "Manual"
     EXPIRED = "EXPIRED", "Expired"
     FULLY_CLAIMED = "FULLY_CLAIMED", "Fully Claimed"
+
+
+class LocationPlaceType(models.TextChoices):
+    FOOD_CENTRE = "FOOD_CENTRE", "Food centre"
+    RESTAURANT = "RESTAURANT", "Restaurant"
+    SHOPPING = "SHOPPING", "Shopping"
+    TRANSIT = "TRANSIT", "Transit"
+    PARK = "PARK", "Park"
+    OTHER = "OTHER", "Other"
+ 

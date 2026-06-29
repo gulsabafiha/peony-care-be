@@ -397,6 +397,33 @@ class TestReceiverProfile:
         assert profile["longitude"] == 103.9
         assert profile["browse_radius_km"] == 10
 
+    def test_upload_profile_photo(self, api_client, receiver_user):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        client = auth_client(api_client, receiver_user)
+        photo = SimpleUploadedFile(
+            "profile.jpg",
+            b"fake-image-content",
+            content_type="image/jpeg",
+        )
+        response = client.patch(
+            reverse("receiver_accounts:receiver-profile"),
+            {"photo": photo},
+            format="multipart",
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["photo_url"] is not None
+        assert "/media/receivers/" in data["photo_url"]
+
+        response = client.patch(
+            reverse("receiver_accounts:receiver-profile"),
+            {"remove_photo": True},
+            format="multipart",
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["photo_url"] is None
+
     def test_stats(self, api_client, receiver_user, food_item):
         client = auth_client(api_client, receiver_user)
         client.post(
@@ -417,3 +444,54 @@ class TestReceiverProfile:
         client = auth_client(api_client, restaurant_profile.user)
         response = client.get(reverse("receiver_accounts:receiver-profile"))
         assert response.status_code == 403
+
+
+class TestReceiverLocationSettings:
+    def test_get_and_update_location_settings(self, api_client, receiver_user):
+        client = auth_client(api_client, receiver_user)
+        response = client.get(reverse("receiver_accounts:receiver-location-settings"))
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["browse_radius_km"] == 5.0
+        assert data["radius_options_km"] == [1, 2, 3, 5, 10]
+        assert data["location_services_enabled"] is True
+        assert data["save_location_history"] is True
+
+        response = client.patch(
+            reverse("receiver_accounts:receiver-location-settings"),
+            {
+                "browse_radius_km": 10,
+                "location_services_enabled": False,
+            },
+            format="json",
+        )
+        assert response.status_code == 200
+        updated = response.json()["data"]
+        assert updated["browse_radius_km"] == 10
+        assert updated["location_services_enabled"] is False
+
+    def test_location_history_and_clear(self, api_client, receiver_user):
+        client = auth_client(api_client, receiver_user)
+        response = client.post(
+            reverse("receiver_accounts:receiver-location-history"),
+            {
+                "place_name": "Maxwell Food Centre",
+                "area_label": "Tanjong Pagar · 1 Kadayanallur St",
+                "place_type": "FOOD_CENTRE",
+                "latitude": 1.2804,
+                "longitude": 103.8444,
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        assert response.json()["data"]["place_name"] == "Maxwell Food Centre"
+
+        response = client.get(reverse("receiver_accounts:receiver-location-settings"))
+        assert response.json()["data"]["recent_places_count"] == 1
+
+        response = client.delete(reverse("receiver_accounts:receiver-location-history"))
+        assert response.status_code == 200
+        assert response.json()["data"]["cleared"] is True
+
+        response = client.get(reverse("receiver_accounts:receiver-location-settings"))
+        assert response.json()["data"]["recent_places_count"] == 0
