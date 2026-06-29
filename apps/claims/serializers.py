@@ -13,6 +13,7 @@ class DailyLimitSerializer(serializers.Serializer):
     limit = serializers.IntegerField()
     can_claim = serializers.BooleanField()
     resets_at = serializers.DateTimeField()
+    seconds_until_reset = serializers.IntegerField()
 
 
 class ClaimResponseSerializer(serializers.Serializer):

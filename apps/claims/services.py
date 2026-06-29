@@ -28,11 +28,14 @@ def get_daily_limit_status(receiver: User) -> dict:
         status=ClaimStatus.CLAIMED,
     ).count()
     limit = settings.DAILY_CLAIM_LIMIT
+    resets_at = next_midnight_sgt()
+    seconds_until_reset = max(0, int((resets_at - now_sgt()).total_seconds()))
     return {
         "used": used,
         "limit": limit,
         "can_claim": used < limit,
-        "resets_at": next_midnight_sgt().isoformat(),
+        "resets_at": resets_at.isoformat(),
+        "seconds_until_reset": seconds_until_reset,
     }
 
 
