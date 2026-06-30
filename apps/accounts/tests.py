@@ -44,6 +44,86 @@ class TestOtpSend:
         assert response.json()["data"]["phone"] == PHONE
         assert OtpChallenge.objects.filter(phone_e164=PHONE).exists()
 
+    @patch("apps.accounts.services._generate_otp_code", return_value=OTP_CODE)
+    def test_send_register_otp_normalizes_spaced_phone(self, _mock_code, api_client):
+        response = api_client.post(
+            reverse("auth-otp-send"),
+            {"phone": "+65 9123 4567", "purpose": OtpPurpose.REGISTER},
+            format="json",
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["phone"] == PHONE
+        assert OtpChallenge.objects.filter(phone_e164=PHONE).exists()
+
+    def test_send_register_rejects_already_registered_spaced_phone(self, api_client):
+        from apps.accounts.models import ReceiverProfile
+
+        user = User.objects.create_user(
+            phone_e164=PHONE,
+            role=UserRole.RECEIVER,
+            is_active=True,
+        )
+        ReceiverProfile.objects.create(
+            user=user,
+            display_name="Sarah",
+            latitude=1.3521,
+            longitude=103.8198,
+        )
+
+        response = api_client.post(
+            reverse("auth-otp-send"),
+            {"phone": "+65 9123 4567", "purpose": OtpPurpose.REGISTER},
+            format="json",
+        )
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "ALREADY_REGISTERED"
+
+    def test_send_register_rejects_legacy_spaced_phone_in_database(self, api_client):
+        from apps.accounts.models import ReceiverProfile
+
+        user = User(phone_e164="+65 9123 4567", role=UserRole.RECEIVER, is_active=True)
+        user.set_unusable_password()
+        user.save()
+        ReceiverProfile.objects.create(
+            user=user,
+            display_name="Sarah",
+            latitude=1.3521,
+            longitude=103.8198,
+        )
+
+        response = api_client.post(
+            reverse("auth-otp-send"),
+            {"phone": PHONE, "purpose": OtpPurpose.REGISTER},
+            format="json",
+        )
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "ALREADY_REGISTERED"
+
+    def test_send_login_otp_finds_legacy_spaced_phone_in_database(self, api_client):
+        from apps.accounts.models import ReceiverProfile
+
+        user = User(phone_e164="+65 9123 4567", role=UserRole.RECEIVER, is_active=True)
+        user.set_unusable_password()
+        user.save()
+        ReceiverProfile.objects.create(
+            user=user,
+            display_name="Sarah",
+            latitude=1.3521,
+            longitude=103.8198,
+        )
+
+        with patch("apps.accounts.services._generate_otp_code", return_value=OTP_CODE):
+            response = api_client.post(
+                reverse("auth-otp-send"),
+                {"phone": PHONE, "purpose": OtpPurpose.LOGIN},
+                format="json",
+            )
+
+        assert response.status_code == 200
+        assert response.json()["data"]["phone"] == PHONE
+        user.refresh_from_db()
+        assert user.phone_e164 == PHONE
+
     def test_send_login_otp_requires_existing_user(self, api_client):
         response = api_client.post(
             reverse("auth-otp-send"),
@@ -62,6 +142,14 @@ class TestUserManager:
         )
 
         assert user.has_usable_password() is False
+
+    def test_create_user_normalizes_spaced_phone(self):
+        user = User.objects.create_user(
+            phone_e164="+65 9123 4567",
+            role=UserRole.RECEIVER,
+        )
+
+        assert user.phone_e164 == PHONE
 
     def test_superuser_password_is_usable(self):
         user = User.objects.create_superuser(

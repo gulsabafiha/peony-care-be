@@ -3,7 +3,6 @@ import logging
 import secrets
 from datetime import timedelta
 
-import phonenumbers
 from django.conf import settings
 from django.core import signing
 from django.db import transaction
@@ -21,31 +20,34 @@ from apps.accounts.models import (
 from apps.common.choices import OtpPurpose, UserRole
 from apps.common.exceptions import PeonyAPIException
 from apps.common.geocoding import extract_postal_code, geocode_address
+from apps.common.phone import normalize_phone_e164
 
 logger = logging.getLogger(__name__)
 
 REGISTRATION_TOKEN_SALT = "peony.registration"
-PHONE_REGION = "SG"
 
 
-def normalize_phone_e164(phone: str) -> str:
-    try:
-        parsed = phonenumbers.parse(phone, PHONE_REGION)
-    except phonenumbers.NumberParseException as exc:
-        raise PeonyAPIException(
-            code="INVALID_PHONE",
-            message="Phone number must be a valid E.164 number.",
-            http_status=400,
-        ) from exc
+def find_user_by_phone(phone: str) -> User | None:
+    phone_e164 = normalize_phone_e164(phone)
+    user = User.objects.filter(phone_e164=phone_e164).first()
+    if user is not None:
+        return user
 
-    if not phonenumbers.is_valid_number(parsed):
-        raise PeonyAPIException(
-            code="INVALID_PHONE",
-            message="Phone number must be a valid E.164 number.",
-            http_status=400,
-        )
+    for candidate in User.objects.exclude(phone_e164=phone_e164).only(
+        "id", "phone_e164", "role", "is_active"
+    ):
+        try:
+            if normalize_phone_e164(candidate.phone_e164) != phone_e164:
+                continue
+        except PeonyAPIException:
+            continue
 
-    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+        if candidate.phone_e164 != phone_e164:
+            candidate.phone_e164 = phone_e164
+            candidate.save(update_fields=["phone_e164"])
+        return candidate
+
+    return None
 
 
 def _hash_value(value: str) -> str:
@@ -61,7 +63,9 @@ def send_otp(phone: str, purpose: str) -> dict:
     phone_e164 = normalize_phone_e164(phone)
 
     if purpose == OtpPurpose.LOGIN:
-        if not User.objects.filter(phone_e164=phone_e164, is_active=True).exists():
+        if not (
+            (user := find_user_by_phone(phone_e164)) and user.is_active
+        ):
             raise PeonyAPIException(
                 code="USER_NOT_FOUND",
                 message="No active account found for this phone number.",
@@ -69,7 +73,7 @@ def send_otp(phone: str, purpose: str) -> dict:
             )
 
     if purpose == OtpPurpose.REGISTER:
-        user = User.objects.filter(phone_e164=phone_e164).first()
+        user = find_user_by_phone(phone_e164)
         if user and user.is_active and _user_has_any_profile(user):
             raise PeonyAPIException(
                 code="ALREADY_REGISTERED",
@@ -153,8 +157,8 @@ def verify_otp(phone: str, code: str) -> dict:
     challenge.save(update_fields=["consumed_at"])
 
     if challenge.purpose == OtpPurpose.LOGIN:
-        user = User.objects.filter(phone_e164=phone_e164, is_active=True).first()
-        if user is None:
+        user = find_user_by_phone(phone_e164)
+        if user is None or not user.is_active:
             raise PeonyAPIException(
                 code="USER_NOT_FOUND",
                 message="No active account found for this phone number.",
@@ -270,7 +274,7 @@ def register_restaurant(phone_e164: str, data: dict) -> dict:
         longitude=longitude,
         contact_name=data["contact_name"],
         contact_email=data.get("contact_email", ""),
-        contact_phone=data.get("contact_phone", phone_e164),
+        contact_phone=_normalize_optional_phone(data.get("contact_phone")) or phone_e164,
         is_approved=True,
         approved_at=timezone.now(),
     )
@@ -299,8 +303,15 @@ def register_donor(phone_e164: str, display_name: str, contact_email: str = "") 
     return _issue_jwt_response(user)
 
 
+def _normalize_optional_phone(phone: str | None) -> str:
+    if not phone or not str(phone).strip():
+        return ""
+    return normalize_phone_e164(phone)
+
+
 def _get_or_create_user(phone_e164: str, role: str) -> User:
-    user = User.objects.filter(phone_e164=phone_e164).first()
+    phone_e164 = normalize_phone_e164(phone_e164)
+    user = find_user_by_phone(phone_e164)
     if user:
         if user.role != role:
             raise PeonyAPIException(

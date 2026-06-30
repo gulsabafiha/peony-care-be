@@ -1,10 +1,13 @@
 from django.contrib.auth.base_user import BaseUserManager
 
+from apps.common.phone import normalize_phone_e164
+
 
 class UserManager(BaseUserManager):
     def create_user(self, phone_e164: str, role: str, password: str | None = None, **extra_fields):
         if not phone_e164:
             raise ValueError("phone_e164 is required")
+        phone_e164 = normalize_phone_e164(phone_e164)
         user = self.model(phone_e164=phone_e164, role=role, **extra_fields)
         if password:
             user.set_password(password)
