@@ -74,14 +74,14 @@ POST /api/v1/auth/otp/send/
 With `OTP_PROVIDER=console` (default in dev), the code is printed to container logs:
 
 ```
-[Peony OTP] +6591234567 (register): 123456
+[Peony OTP] +6591234567 (register): 1234
 ```
 
 ### 2. Verify OTP
 
 ```http
 POST /api/v1/auth/otp/verify/
-{ "phone": "+6591234567", "code": "123456", "purpose": "register" }
+{ "phone": "+6591234567", "code": "1234", "purpose": "register" }
 ```
 
 Returns a short-lived `registration_token`.

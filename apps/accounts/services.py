@@ -54,7 +54,7 @@ def _hash_value(value: str) -> str:
 
 
 def _generate_otp_code() -> str:
-    return f"{secrets.randbelow(1_000_000):06d}"
+    return f"{secrets.randbelow(10_000):04d}"
 
 
 def send_otp(phone: str, purpose: str) -> dict:

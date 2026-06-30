@@ -14,7 +14,7 @@ from apps.common.choices import OtpPurpose, UserRole
 pytestmark = pytest.mark.django_db
 
 PHONE = "+6591234567"
-OTP_CODE = "123456"
+OTP_CODE = "1234"
 
 
 @pytest.fixture
