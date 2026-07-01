@@ -65,6 +65,17 @@ class RestaurantProfileUpdateSerializer(serializers.Serializer):
     opening_hours = serializers.CharField(required=False, allow_blank=True)
     about = serializers.CharField(required=False, allow_blank=True)
     photo_url = serializers.URLField(required=False, allow_blank=True)
+    latitude = serializers.FloatField(min_value=-90, max_value=90, required=False)
+    longitude = serializers.FloatField(min_value=-180, max_value=180, required=False)
+
+    def validate(self, data):
+        lat = data.get("latitude")
+        lng = data.get("longitude")
+        if (lat is None) != (lng is None):
+            raise serializers.ValidationError(
+                {"latitude": "latitude and longitude must be provided together."}
+            )
+        return data
 
 
 class ApprovalStatusSerializer(serializers.Serializer):

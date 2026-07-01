@@ -269,8 +269,47 @@ class TestRegistration:
         assert response.status_code == 201
         user = User.objects.get(phone_e164=PHONE)
         assert user.restaurant_profile.name == "Tian Tian Hainanese"
+        assert float(user.restaurant_profile.latitude) == 1.3521
+        assert float(user.restaurant_profile.longitude) == 103.8198
         assert user.restaurant_profile.is_approved is True
         assert user.restaurant_profile.approved_at is not None
+
+    def test_register_restaurant_with_map_pin(self, api_client):
+        token = self._registration_token(api_client)
+        response = api_client.post(
+            reverse("auth-register-restaurant"),
+            {
+                "restaurant_name": "Tian Tian Hainanese",
+                "uen": "200912345B",
+                "address": "443 Joo Chiat Rd, Singapore 427656",
+                "contact_name": "Manager",
+                "latitude": 1.3012345,
+                "longitude": 103.8587654,
+            },
+            format="json",
+            HTTP_REGISTRATION_TOKEN=token,
+        )
+        assert response.status_code == 201
+        user = User.objects.get(phone_e164=PHONE)
+        assert float(user.restaurant_profile.latitude) == 1.3012345
+        assert float(user.restaurant_profile.longitude) == 103.8587654
+
+    def test_register_restaurant_rejects_partial_map_pin(self, api_client):
+        token = self._registration_token(api_client)
+        response = api_client.post(
+            reverse("auth-register-restaurant"),
+            {
+                "restaurant_name": "Tian Tian Hainanese",
+                "uen": "200912345C",
+                "address": "443 Joo Chiat Rd, Singapore 427656",
+                "contact_name": "Manager",
+                "latitude": 1.3012345,
+            },
+            format="json",
+            HTTP_REGISTRATION_TOKEN=token,
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
     def test_register_donor(self, api_client):
         token = self._registration_token(api_client)

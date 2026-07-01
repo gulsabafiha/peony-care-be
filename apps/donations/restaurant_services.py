@@ -9,7 +9,7 @@ from apps.accounts.models import RestaurantProfile, User
 from apps.claims.models import FoodClaim
 from apps.common.choices import ClaimStatus, ClosedReason, FoodStatus, ListStatus
 from apps.common.exceptions import PeonyAPIException
-from apps.common.geocoding import extract_postal_code, geocode_address
+from apps.common.geocoding import extract_postal_code, resolve_restaurant_coordinates
 from apps.common.timezone_utils import format_pickup_window, now_sgt, today_sgt
 from apps.donations.models import FoodItem
 
@@ -321,10 +321,18 @@ def update_restaurant_profile_data(user: User, data: dict) -> dict:
         if field in data:
             setattr(restaurant, field, data[field])
 
-    if "address" in data:
-        restaurant.address = data["address"]
-        restaurant.postal_code = extract_postal_code(data["address"])
-        lat, lng = geocode_address(data["address"])
+    if "address" in data or "latitude" in data or "longitude" in data:
+        address = data.get("address", restaurant.address)
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        if "address" in data:
+            restaurant.address = address
+            restaurant.postal_code = extract_postal_code(address)
+        lat, lng = resolve_restaurant_coordinates(
+            address,
+            latitude,
+            longitude,
+        )
         restaurant.latitude = lat
         restaurant.longitude = lng
 

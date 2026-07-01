@@ -8,21 +8,52 @@ from apps.donors.models import MealOrder, MealOrderItem, MoneyDonation
 class MealOrderItemInline(admin.TabularInline):
     model = MealOrderItem
     extra = 0
+    autocomplete_fields = ("menu_item",)
 
 
 @admin.register(MealOrder)
 class MealOrderAdmin(admin.ModelAdmin):
-    list_display = ("id", "donor", "restaurant", "status", "total_amount_sgd", "created_at")
-    list_filter = ("status",)
+    list_display = (
+        "id",
+        "donor",
+        "restaurant",
+        "status",
+        "total_amount_sgd",
+        "credit_preference",
+        "created_at",
+    )
+    list_filter = ("status", "credit_preference")
+    search_fields = ("donor__display_name", "restaurant__name")
+    readonly_fields = ("id", "created_at")
+    autocomplete_fields = ("donor", "restaurant", "food_item")
     inlines = [MealOrderItemInline]
+    ordering = ("-created_at",)
+
+
+@admin.register(MealOrderItem)
+class MealOrderItemAdmin(admin.ModelAdmin):
+    list_display = ("meal_order", "menu_item", "quantity", "unit_price_sgd")
+    search_fields = ("meal_order__id", "menu_item__name", "meal_order__donor__display_name")
+    autocomplete_fields = ("meal_order", "menu_item")
 
 
 @admin.register(MoneyDonation)
 class MoneyDonationAdmin(admin.ModelAdmin):
-    list_display = ("reference_code", "donor", "amount_sgd", "status", "created_at")
-    list_filter = ("status",)
-    search_fields = ("reference_code", "donor__display_name")
+    list_display = (
+        "reference_code",
+        "donor",
+        "amount_sgd",
+        "status",
+        "is_anonymous",
+        "created_at",
+        "confirmed_at",
+    )
+    list_filter = ("status", "is_anonymous")
+    search_fields = ("reference_code", "donor__display_name", "confirmed_by")
+    readonly_fields = ("id", "created_at", "transfer_marked_at", "confirmed_at")
+    autocomplete_fields = ("donor",)
     actions = ["confirm_donations"]
+    ordering = ("-created_at",)
 
     @admin.action(description="Confirm selected PayNow transfers")
     def confirm_donations(self, request, queryset):

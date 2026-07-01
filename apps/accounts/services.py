@@ -19,7 +19,7 @@ from apps.accounts.models import (
 )
 from apps.common.choices import OtpPurpose, UserRole
 from apps.common.exceptions import PeonyAPIException
-from apps.common.geocoding import extract_postal_code, geocode_address
+from apps.common.geocoding import extract_postal_code, resolve_restaurant_coordinates
 from apps.common.phone import normalize_phone_e164
 
 logger = logging.getLogger(__name__)
@@ -261,7 +261,11 @@ def register_restaurant(phone_e164: str, data: dict) -> dict:
             http_status=409,
         )
 
-    latitude, longitude = geocode_address(data["address"])
+    latitude, longitude = resolve_restaurant_coordinates(
+        data["address"],
+        data.get("latitude"),
+        data.get("longitude"),
+    )
     postal_code = extract_postal_code(data["address"])
 
     RestaurantProfile.objects.create(
