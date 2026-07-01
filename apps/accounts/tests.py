@@ -252,6 +252,20 @@ class TestRegistration:
         assert float(user.receiver_profile.longitude) == 103.8198
         assert user.receiver_profile.browse_radius_km == 5.0
 
+    def test_register_receiver_without_location(self, api_client):
+        token = self._registration_token(api_client)
+        response = api_client.post(
+            reverse("auth-register-receiver"),
+            {"display_name": "Sarah Mun"},
+            format="json",
+            HTTP_REGISTRATION_TOKEN=token,
+        )
+        assert response.status_code == 201
+        user = User.objects.get(phone_e164=PHONE)
+        assert user.receiver_profile.display_name == "Sarah Mun"
+        assert user.receiver_profile.latitude is None
+        assert user.receiver_profile.longitude is None
+
     def test_register_restaurant(self, api_client):
         token = self._registration_token(api_client)
         response = api_client.post(

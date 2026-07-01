@@ -15,8 +15,17 @@ class OtpVerifySerializer(serializers.Serializer):
 
 class ReceiverRegisterSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=100)
-    latitude = serializers.FloatField(min_value=-90, max_value=90)
-    longitude = serializers.FloatField(min_value=-180, max_value=180)
+    latitude = serializers.FloatField(min_value=-90, max_value=90, required=False)
+    longitude = serializers.FloatField(min_value=-180, max_value=180, required=False)
+
+    def validate(self, data):
+        lat = data.get("latitude")
+        lng = data.get("longitude")
+        if (lat is None) != (lng is None):
+            raise serializers.ValidationError(
+                {"latitude": "latitude and longitude must be provided together."}
+            )
+        return data
 
 
 class RestaurantRegisterSerializer(serializers.Serializer):

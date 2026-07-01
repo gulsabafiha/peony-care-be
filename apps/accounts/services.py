@@ -229,8 +229,8 @@ def _serialize_user(user: User) -> dict:
 def register_receiver(
     phone_e164: str,
     display_name: str,
-    latitude: float,
-    longitude: float,
+    latitude: float | None = None,
+    longitude: float | None = None,
 ) -> dict:
     user = _get_or_create_user(phone_e164, UserRole.RECEIVER)
     if ReceiverProfile.objects.filter(user=user).exists():
