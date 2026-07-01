@@ -33,6 +33,38 @@ docker compose exec web python manage.py createsuperuser
 
 Migrations run automatically on container start via `docker/entrypoint.sh`.
 
+### Seed dummy data (all modules)
+
+Load shared test users and sample data for receiver, restaurant, donor, claims, donations, and notifications:
+
+```bash
+docker compose exec web python manage.py seed_data
+```
+
+Reset and re-seed:
+
+```bash
+docker compose exec web python manage.py seed_data --clear
+```
+
+Delete seeded users only (no re-seed):
+
+```bash
+docker compose exec web python manage.py seed_data --clear-only
+```
+
+| Role | Phone | Notes |
+|------|-------|-------|
+| Admin | `+6590000001` | Django admin — password `PeonyAdmin123!` (override with `--password`) |
+| Receiver | `+6591000001` | Sarah Mun |
+| Receiver | `+6591000002` | Marcus Tan |
+| Restaurant | `+6592000001` | Tian Tian Hainanese |
+| Restaurant | `+6592000002` | Joo Chiat Kitchen |
+| Donor | `+6593000001` | James Tan |
+| Donor | `+6593000002` | Emily Koh |
+
+App users log in via OTP (`OTP_PROVIDER=console` prints codes in `docker compose logs -f web`).
+
 ## Local development (without Docker)
 
 ```bash
