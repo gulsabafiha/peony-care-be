@@ -17,6 +17,7 @@ from apps.accounts.models import (
     RestaurantProfile,
     User,
 )
+from apps.accounts.otp_sms import dispatch_otp
 from apps.common.choices import OtpPurpose, UserRole
 from apps.common.exceptions import PeonyAPIException
 from apps.common.geocoding import extract_postal_code, resolve_restaurant_coordinates
@@ -101,13 +102,11 @@ def send_otp(phone: str, purpose: str) -> dict:
         expires_at=timezone.now() + timedelta(minutes=settings.OTP_EXPIRY_MINUTES),
     )
 
-    if settings.OTP_PROVIDER == "console":
-        # Visible in `docker compose logs -f web` during development.
-        print(f"[Peony OTP] {phone_e164} ({purpose}): {code}", flush=True)
-        logger.info("OTP for %s (%s): %s", phone_e164, purpose, code)
-    else:
-        # SMS provider integration (Twilio / AWS SNS) goes here.
-        logger.info("OTP dispatched via %s for %s", settings.OTP_PROVIDER, phone_e164)
+    try:
+        dispatch_otp(phone_e164, purpose, code)
+    except Exception:
+        challenge.delete()
+        raise
 
     return {
         "phone": phone_e164,

@@ -44,6 +44,61 @@ class TestOtpSend:
         assert response.json()["data"]["phone"] == PHONE
         assert OtpChallenge.objects.filter(phone_e164=PHONE).exists()
 
+    @patch("apps.accounts.otp_sms.boto3.client")
+    @patch("apps.accounts.services._generate_otp_code", return_value=OTP_CODE)
+    def test_send_register_otp_via_sns(self, _mock_code, mock_boto_client, api_client, settings):
+        settings.OTP_PROVIDER = "sns"
+        settings.AWS_ACCESS_KEY_ID = "test-key"
+        settings.AWS_SECRET_ACCESS_KEY = "test-secret"
+        settings.AWS_S3_REGION_NAME = "ap-southeast-1"
+
+        mock_sns = mock_boto_client.return_value
+        mock_sns.publish.return_value = {"MessageId": "msg-123"}
+
+        response = api_client.post(
+            reverse("auth-otp-send"),
+            {"phone": "+8801712345678", "purpose": OtpPurpose.REGISTER},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.json()["data"]["phone"] == "+8801712345678"
+        assert OtpChallenge.objects.filter(phone_e164="+8801712345678").exists()
+        mock_boto_client.assert_called_once_with(
+            "sns",
+            region_name="ap-southeast-1",
+            aws_access_key_id="test-key",
+            aws_secret_access_key="test-secret",
+        )
+        mock_sns.publish.assert_called_once()
+        publish_kwargs = mock_sns.publish.call_args.kwargs
+        assert publish_kwargs["PhoneNumber"] == "+8801712345678"
+        assert OTP_CODE in publish_kwargs["Message"]
+
+    @patch("apps.accounts.otp_sms.boto3.client")
+    @patch("apps.accounts.services._generate_otp_code", return_value=OTP_CODE)
+    def test_sns_failure_does_not_keep_challenge(
+        self, _mock_code, mock_boto_client, api_client, settings
+    ):
+        from botocore.exceptions import ClientError
+
+        settings.OTP_PROVIDER = "sns"
+        mock_sns = mock_boto_client.return_value
+        mock_sns.publish.side_effect = ClientError(
+            {"Error": {"Code": "InvalidParameter", "Message": "bad"}},
+            "Publish",
+        )
+
+        response = api_client.post(
+            reverse("auth-otp-send"),
+            {"phone": PHONE, "purpose": OtpPurpose.REGISTER},
+            format="json",
+        )
+
+        assert response.status_code == 502
+        assert response.json()["error"]["code"] == "OTP_DELIVERY_FAILED"
+        assert not OtpChallenge.objects.filter(phone_e164=PHONE).exists()
+
     @patch("apps.accounts.services._generate_otp_code", return_value=OTP_CODE)
     def test_send_register_otp_normalizes_spaced_phone(self, _mock_code, api_client):
         response = api_client.post(

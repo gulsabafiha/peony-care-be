@@ -10,6 +10,7 @@ from apps.claims.models import FoodClaim
 from apps.common.choices import ClaimStatus, ClosedReason, FoodStatus, ListStatus
 from apps.common.exceptions import PeonyAPIException
 from apps.common.geocoding import extract_postal_code, resolve_restaurant_coordinates
+from apps.common.phone import normalize_phone_e164
 from apps.common.timezone_utils import format_pickup_window, now_sgt, today_sgt
 from apps.donations.models import FoodItem
 
@@ -312,7 +313,6 @@ def update_restaurant_profile_data(user: User, data: dict) -> dict:
         "name",
         "contact_name",
         "contact_email",
-        "contact_phone",
         "opening_hours",
         "about",
         "photo_url",
@@ -320,6 +320,12 @@ def update_restaurant_profile_data(user: User, data: dict) -> dict:
     for field in profile_fields:
         if field in data:
             setattr(restaurant, field, data[field])
+
+    if "contact_phone" in data:
+        phone = data["contact_phone"]
+        restaurant.contact_phone = (
+            normalize_phone_e164(phone) if phone and str(phone).strip() else ""
+        )
 
     if "address" in data or "latitude" in data or "longitude" in data:
         address = data.get("address", restaurant.address)

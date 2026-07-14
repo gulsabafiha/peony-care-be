@@ -3,8 +3,6 @@ import pytest
 from apps.common.exceptions import PeonyAPIException
 from apps.common.phone import normalize_phone_e164
 
-pytestmark = pytest.mark.django_db
-
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
@@ -13,6 +11,11 @@ pytestmark = pytest.mark.django_db
         ("+65 9123 4567", "+6591234567"),
         ("91234567", "+6591234567"),
         ("65 9123 4567", "+6591234567"),
+        ("+8801712345678", "+8801712345678"),
+        ("+880 1712-345678", "+8801712345678"),
+        ("01712345678", "+8801712345678"),
+        ("1712345678", "+8801712345678"),
+        ("8801712345678", "+8801712345678"),
     ],
 )
 def test_normalize_phone_e164(raw, expected):

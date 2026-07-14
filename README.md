@@ -287,7 +287,7 @@ See `.env.example`. Notable settings:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OTP_PROVIDER` | `console` | `console` prints OTP to logs; `twilio` / `sns` for production |
+| `OTP_PROVIDER` | `console` | `console` prints OTP to logs; `sns` sends SMS via AWS SNS |
 | `MAX_CLAIM_DISTANCE_M` | `500` | Max distance (m) between receiver and restaurant to claim |
 | `DAILY_CLAIM_LIMIT` | `1` | Max claims per receiver per day |
 | `DEFAULT_BROWSE_RADIUS_KM` | `5` | Default browse radius |
