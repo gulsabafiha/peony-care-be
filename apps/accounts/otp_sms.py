@@ -15,10 +15,11 @@ logger = logging.getLogger(__name__)
 
 def dispatch_otp(phone_e164: str, purpose: str, code: str) -> None:
     provider = (settings.OTP_PROVIDER or "console").strip().lower()
+    # Always emit to stdout so `docker compose logs -f web` shows OTP activity.
+    print(f"[Peony OTP] provider={provider} phone={phone_e164} purpose={purpose}", flush=True)
 
     if provider == "console":
-        # Visible in `docker compose logs -f web` during development.
-        print(f"[Peony OTP] {phone_e164} ({purpose}): {code}", flush=True)
+        print(f"[Peony OTP] code={code} (console — SMS not sent)", flush=True)
         logger.info("OTP for %s (%s): %s", phone_e164, purpose, code)
         return
 
@@ -82,6 +83,10 @@ def _send_via_sns(phone_e164: str, purpose: str, code: str) -> None:
         ) from exc
 
     message_id = response.get("MessageId", "")
+    print(
+        f"[Peony OTP] SNS sent phone={phone_e164} purpose={purpose} message_id={message_id}",
+        flush=True,
+    )
     logger.info(
         "OTP SMS sent via SNS to %s (purpose=%s, message_id=%s)",
         phone_e164,

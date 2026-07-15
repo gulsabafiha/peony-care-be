@@ -141,6 +141,39 @@ REGISTRATION_TOKEN_MAX_AGE_SECONDS = config(
 PAYNOW_UEN = config("PAYNOW_UEN", default="")
 PAYNOW_ACCOUNT_NAME = config("PAYNOW_ACCOUNT_NAME", default="Peony Care Ltd")
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {
+            "format": "[{levelname}] {asctime} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "apps": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Peony Care API",
     "DESCRIPTION": "Backend API for the Peony Care food-share application.",
