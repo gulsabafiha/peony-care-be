@@ -28,4 +28,5 @@ USER django
 ENV DJANGO_SETTINGS_MODULE=config.settings.production
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+# Default 1 worker suits small EC2 (1GB). Override with WEB_CONCURRENCY on larger hosts.
+CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${WEB_CONCURRENCY:-1} --timeout 60 --graceful-timeout 30"]
