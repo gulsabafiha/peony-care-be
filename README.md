@@ -317,6 +317,16 @@ docker compose -f docker-compose.prod.yml up --build
 
 Set `DJANGO_SETTINGS_MODULE=config.settings.production` and a strong `DJANGO_SECRET_KEY`.
 
+For admin over plain HTTP (e.g. `http://<EC2-IP>:8000/admin/`), set in `.env`:
+
+```bash
+ALLOWED_HOSTS=13.60.25.119
+CSRF_TRUSTED_ORIGINS=http://13.60.25.119:8000
+SECURE_SSL_REDIRECT=False
+```
+
+Without `CSRF_TRUSTED_ORIGINS` (and with secure cookies on HTTP), Django admin login returns **403 CSRF verification failed**. Once you put HTTPS in front of the app, switch to `SECURE_SSL_REDIRECT=True` and use `https://...` origins.
+
 ## CI/CD
 
 - **CI** (`.github/workflows/ci.yml`): lint → test → Docker build on `main`
