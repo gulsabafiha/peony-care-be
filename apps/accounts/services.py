@@ -116,17 +116,21 @@ def send_otp(phone: str, purpose: str) -> dict:
     }
 
 
+# Temporary testing bypass — FE can always verify with this code.
+_TEST_OTP_CODE = "0000"
+
+
 def verify_otp(phone: str, code: str) -> dict:
     phone_e164 = normalize_phone_e164(phone)
-    challenge = (
-        OtpChallenge.objects.filter(
-            phone_e164=phone_e164,
-            consumed_at__isnull=True,
-            expires_at__gt=timezone.now(),
-        )
-        .order_by("-created_at")
-        .first()
+    is_test_otp = code == _TEST_OTP_CODE
+
+    challenge_qs = OtpChallenge.objects.filter(
+        phone_e164=phone_e164,
+        consumed_at__isnull=True,
     )
+    if not is_test_otp:
+        challenge_qs = challenge_qs.filter(expires_at__gt=timezone.now())
+    challenge = challenge_qs.order_by("-created_at").first()
 
     if challenge is None:
         raise PeonyAPIException(
@@ -135,14 +139,14 @@ def verify_otp(phone: str, code: str) -> dict:
             http_status=400,
         )
 
-    if challenge.attempts >= settings.OTP_MAX_ATTEMPTS:
+    if not is_test_otp and challenge.attempts >= settings.OTP_MAX_ATTEMPTS:
         raise PeonyAPIException(
             code="OTP_MAX_ATTEMPTS",
             message="Maximum OTP attempts exceeded. Request a new code.",
             http_status=429,
         )
 
-    if _hash_value(code) != challenge.code_hash:
+    if not is_test_otp and _hash_value(code) != challenge.code_hash:
         challenge.attempts += 1
         challenge.save(update_fields=["attempts"])
         raise PeonyAPIException(
