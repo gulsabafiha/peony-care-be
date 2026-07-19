@@ -2,8 +2,6 @@ import pytest
 
 from apps.common.exceptions import PeonyAPIException
 from apps.common.geocoding import (
-    BD_GEOCODE_STUB,
-    SG_GEOCODE_STUB,
     extract_postal_code,
     geocode_address,
     resolve_restaurant_coordinates,
@@ -25,12 +23,24 @@ def test_extract_postal_code(address, expected):
 
 def test_geocode_address_from_singapore_postal_code():
     lat, lng = geocode_address("443 Joo Chiat Rd, Singapore 427656")
-    assert (lat, lng) == SG_GEOCODE_STUB
+    assert (lat, lng) == (1.30680, 103.90090)
 
 
 def test_geocode_address_from_bangladesh_postal_code():
     lat, lng = geocode_address("House 12, Road 5, Dhanmondi, Dhaka 1205")
-    assert (lat, lng) == BD_GEOCODE_STUB
+    assert (lat, lng) == (23.74610, 90.37420)
+
+
+def test_search_and_reverse_geocode():
+    from apps.common.geocoding import reverse_geocode, search_locations
+
+    results = search_locations("Joo Chiat")
+    assert results
+    assert results[0]["postal_code"] == "427656"
+
+    pinned = reverse_geocode(1.30680, 103.90090)
+    assert pinned["address_line"] == "443 Joo Chiat Road"
+    assert pinned["snapped"] is True
 
 
 def test_geocode_address_rejects_missing_postal():
@@ -51,7 +61,7 @@ def test_resolve_restaurant_coordinates_uses_map_pin():
 
 def test_resolve_restaurant_coordinates_geocodes_when_no_pin():
     lat, lng = resolve_restaurant_coordinates("443 Joo Chiat Rd, Singapore 427656")
-    assert (lat, lng) == SG_GEOCODE_STUB
+    assert (lat, lng) == (1.30680, 103.90090)
 
 
 def test_resolve_restaurant_coordinates_rejects_partial_pin():

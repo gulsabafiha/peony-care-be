@@ -41,7 +41,30 @@ class SponsorshipType(models.TextChoices):
 
 
 class ClaimStatus(models.TextChoices):
-    CLAIMED = "CLAIMED", "Claimed"
+    CLAIMED = "CLAIMED", "Claimed"  # pending / waiting for pickup
+    COLLECTED = "COLLECTED", "Collected"
+    NO_SHOW = "NO_SHOW", "No-show"
+
+
+# Claims that count toward impact / meals fed.
+COUNTED_CLAIM_STATUSES = (
+    ClaimStatus.CLAIMED,
+    ClaimStatus.COLLECTED,
+)
+
+# Claims that consume the receiver daily claim slot.
+DAILY_LIMIT_CLAIM_STATUSES = (
+    ClaimStatus.CLAIMED,
+    ClaimStatus.COLLECTED,
+    ClaimStatus.NO_SHOW,
+)
+
+# Claims shown on the restaurant claims board.
+BOARD_CLAIM_STATUSES = (
+    ClaimStatus.CLAIMED,
+    ClaimStatus.COLLECTED,
+    ClaimStatus.NO_SHOW,
+)
 
 
 class CreditPreference(models.TextChoices):

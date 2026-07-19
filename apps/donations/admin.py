@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.donations.models import FoodItem, FoodReport, FoodReportReasonOption, MenuItem
+from apps.donations.models import FoodItem, FoodReport, FoodReportReasonOption, MenuItem, MenuPhoto
 
 
 @admin.register(FoodItem)
@@ -33,6 +33,16 @@ class MenuItemAdmin(admin.ModelAdmin):
     autocomplete_fields = ("restaurant",)
     list_editable = ("is_available", "sort_order")
     ordering = ("sort_order", "name")
+
+
+@admin.register(MenuPhoto)
+class MenuPhotoAdmin(admin.ModelAdmin):
+    list_display = ("id", "restaurant", "sort_order", "photo_url", "created_at")
+    search_fields = ("restaurant__name", "photo_url")
+    readonly_fields = ("id", "created_at")
+    autocomplete_fields = ("restaurant",)
+    list_editable = ("sort_order",)
+    ordering = ("restaurant", "sort_order")
 
 
 @admin.register(FoodReportReasonOption)

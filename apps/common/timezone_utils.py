@@ -46,6 +46,12 @@ def format_pickup_window(pickup_start: datetime, pickup_end: datetime) -> str:
     return f"{_format_time(start)} — {_format_time(end)}"
 
 
+def format_pickup_window_short(pickup_start: datetime, pickup_end: datetime) -> str:
+    start = pickup_start.astimezone(SGT)
+    end = pickup_end.astimezone(SGT)
+    return f"{_format_time(start)} – {_format_time(end)}"
+
+
 def format_relative_ago(dt: datetime, *, now: datetime | None = None) -> str:
     """Human-friendly relative time, e.g. ``2h ago``, ``yesterday``, ``Jun 4``."""
     now = now or now_sgt()
@@ -72,6 +78,23 @@ def format_day_label(day: date, *, today: date | None = None) -> str:
     if day == today - timedelta(days=1):
         return "Yesterday"
     return f"{day.strftime('%b')} {day.day}"
+
+
+def format_clock_time(dt: datetime) -> str:
+    return dt.astimezone(SGT).strftime("%I:%M %p").lstrip("0")
+
+
+def format_countdown_until(end: datetime, *, now: datetime | None = None) -> str | None:
+    now = now or now_sgt()
+    end = end.astimezone(SGT)
+    seconds = int((end - now).total_seconds())
+    if seconds <= 0:
+        return "Window closed"
+    hours, rem = divmod(seconds, 3600)
+    minutes = rem // 60
+    if hours:
+        return f"{hours}h {minutes}m until window closes"
+    return f"{minutes}m until window closes"
 
 
 def bounding_box(lat: float, lng: float, radius_km: float) -> tuple[float, float, float, float]:

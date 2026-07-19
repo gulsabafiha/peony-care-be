@@ -8,7 +8,13 @@ from django.db import transaction
 
 from apps.accounts.models import User
 from apps.claims.models import FoodClaim
-from apps.common.choices import ClaimStatus, FoodStatus, ListStatus
+from apps.common.choices import (
+    COUNTED_CLAIM_STATUSES,
+    DAILY_LIMIT_CLAIM_STATUSES,
+    ClaimStatus,
+    FoodStatus,
+    ListStatus,
+)
 from apps.common.exceptions import PeonyAPIException
 from apps.common.geo import haversine_distance_m
 from apps.common.timezone_utils import (
@@ -25,7 +31,7 @@ def get_daily_limit_status(receiver: User) -> dict:
     used = FoodClaim.objects.filter(
         receiver=receiver,
         claim_date=today_sgt(),
-        status=ClaimStatus.CLAIMED,
+        status__in=DAILY_LIMIT_CLAIM_STATUSES,
     ).count()
     limit = settings.DAILY_CLAIM_LIMIT
     resets_at = next_midnight_sgt()
@@ -182,7 +188,7 @@ def create_claim(
         FoodClaim.objects.filter(
             receiver=receiver,
             claim_date=today_sgt(),
-            status=ClaimStatus.CLAIMED,
+            status__in=DAILY_LIMIT_CLAIM_STATUSES,
         ).count()
         >= settings.DAILY_CLAIM_LIMIT
     ):
@@ -295,10 +301,10 @@ def list_claim_history(receiver: User) -> dict:
 def get_receiver_stats(receiver: User) -> dict:
     lifetime_meals = FoodClaim.objects.filter(
         receiver=receiver,
-        status=ClaimStatus.CLAIMED,
+        status__in=COUNTED_CLAIM_STATUSES,
     ).count()
     restaurants_count = (
-        FoodClaim.objects.filter(receiver=receiver, status=ClaimStatus.CLAIMED)
+        FoodClaim.objects.filter(receiver=receiver, status__in=COUNTED_CLAIM_STATUSES)
         .values("restaurant_id")
         .distinct()
         .count()

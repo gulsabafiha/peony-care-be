@@ -4,31 +4,42 @@ import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 
-from apps.accounts.models import RestaurantProfile, User
+from apps.accounts.models import ReceiverProfile, RestaurantProfile, User
 from apps.claims.models import FoodClaim
 from apps.common.choices import (
-    ClaimStatus,
+    COUNTED_CLAIM_STATUSES,
     ClosedReason,
+    FoodCategory,
     FoodStatus,
     ListStatus,
     RecurrenceType,
     SponsorshipType,
 )
 from apps.common.exceptions import PeonyAPIException
+from apps.common.geo import haversine_distance_m
 from apps.common.geocoding import extract_postal_code, resolve_restaurant_coordinates
 from apps.common.phone import normalize_phone_e164
 from apps.common.timezone_utils import (
     SGT,
     WEEKDAY_LABELS,
+    bounding_box,
+    format_clock_time,
+    format_countdown_until,
     format_day_label,
     format_pickup_window,
     format_relative_ago,
     now_sgt,
     today_sgt,
     week_bounds_sgt,
+)
+from apps.common.uploads import (
+    delete_stored_photo,
+    save_food_item_photo,
+    save_restaurant_profile_photo,
 )
 from apps.donations.models import FoodItem
 from apps.notifications.models import Notification
@@ -106,6 +117,66 @@ def _recurrence_label(recurrence_type: str, recurrence_days: list) -> str | None
     return ", ".join(labels) if labels else None
 
 
+def _recurrence_badge(recurrence_type: str, recurrence_days: list) -> str | None:
+    label = _recurrence_label(recurrence_type, recurrence_days)
+    if not label:
+        return None
+    if recurrence_type == RecurrenceType.DAILY:
+        return "Repeats daily"
+    return f"Repeats {label}"
+
+
+def _recurrence_schedule_summary(food: FoodItem) -> str | None:
+    if food.recurrence_type == RecurrenceType.NONE:
+        return None
+    post_time = format_clock_time(food.pickup_start)
+    if food.recurrence_type == RecurrenceType.DAILY:
+        return f"Auto-posts every day at {post_time} · next tomorrow"
+    days = _recurrence_label(food.recurrence_type, food.recurrence_days or [])
+    return f"Auto-posts on {days} at {post_time}"
+
+
+def _donation_source(food: FoodItem) -> dict:
+    if food.sponsorship_type != SponsorshipType.DIRECT:
+        sponsor = food.sponsor_display_name or "a donor"
+        return {
+            "type": "SPONSORED",
+            "label": "Sponsored",
+            "detail": f"by {sponsor}",
+            "display": f"Sponsored by {sponsor}",
+        }
+    detail = food.source_note or "Surplus from today's service."
+    return {
+        "type": "SELF",
+        "label": "Self-donated",
+        "detail": detail,
+        "display": f"Self-donated: {detail}",
+    }
+
+
+def _claim_status_label(status: str) -> str:
+    if status == "COLLECTED":
+        return "Collected"
+    if status == "NO_SHOW":
+        return "No-show"
+    return "Pending"
+
+
+def _serialize_claim(claim: FoodClaim) -> dict:
+    return {
+        "id": str(claim.id),
+        "receiver_name": claim.receiver.receiver_profile.display_name,
+        "claimed_at": claim.claimed_at.isoformat(),
+        "collected_at": claim.collected_at.isoformat() if claim.collected_at else None,
+        "no_show_at": claim.no_show_at.isoformat() if claim.no_show_at else None,
+        "status": claim.status,
+        "status_label": _claim_status_label(claim.status),
+        "can_mark_collected": claim.status == "CLAIMED",
+        "can_mark_no_show": claim.status == "CLAIMED",
+        "can_undo_no_show": claim.status == "NO_SHOW",
+    }
+
+
 def _percent_claimed(food: FoodItem) -> int:
     if food.quantity_original <= 0:
         return 0
@@ -139,28 +210,39 @@ def _serialize_restaurant_donation(food: FoodItem, include_claims: bool = False)
     paused_ago = None
     if food.list_status == ListStatus.INACTIVE and food.closed_at:
         paused_ago = f"paused {format_relative_ago(food.closed_at)}"
+    quantity_left = food.quantity_available
+    recurrence_days = food.recurrence_days or []
 
     data = {
         "id": str(food.id),
         "name": food.name,
         "description": food.description,
         "category": food.category,
+        "category_label": _category_label(food.category),
         "unit": food.unit,
         "photo_url": food.photo_url,
         "quantity_original": food.quantity_original,
         "quantity_available": food.quantity_available,
         "quantity_claimed": food.quantity_claimed,
+        "quantity_left": quantity_left,
+        "quantity_left_label": f"{quantity_left} left to claim",
         "claims_progress_label": f"{food.quantity_claimed} of {food.quantity_original} claimed",
         "percent_claimed": percent,
         "is_done": is_done,
         "status": food.status,
         "list_status": food.list_status,
+        "list_status_label": food.list_status.title() if food.list_status else None,
         "pickup_start": food.pickup_start.isoformat(),
         "pickup_end": food.pickup_end.isoformat(),
         "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
+        "time_until_close": format_countdown_until(food.pickup_end),
         "recurrence_type": food.recurrence_type,
-        "recurrence_days": food.recurrence_days or [],
-        "recurrence_label": _recurrence_label(food.recurrence_type, food.recurrence_days or []),
+        "recurrence_days": recurrence_days,
+        "recurrence_label": _recurrence_label(food.recurrence_type, recurrence_days),
+        "recurrence_badge": _recurrence_badge(food.recurrence_type, recurrence_days),
+        "recurrence_schedule_summary": _recurrence_schedule_summary(food),
+        "source_note": food.source_note or "",
+        "source": _donation_source(food),
         "sponsorship_type": food.sponsorship_type,
         "sponsor_display_name": food.sponsor_display_name or None,
         "is_sponsored": is_sponsored,
@@ -173,15 +255,16 @@ def _serialize_restaurant_donation(food: FoodItem, include_claims: bool = False)
         "food_qr_image_url": food.food_qr_image_url or None,
         "claims_count": food.claims.count(),
         "created_at": food.created_at.isoformat(),
+        "actions": {
+            "can_edit": food.list_status == ListStatus.ACTIVE,
+            "can_pause": food.list_status == ListStatus.ACTIVE,
+            "can_delete": food.list_status in (ListStatus.ACTIVE, ListStatus.INACTIVE),
+            "can_reactivate": food.list_status == ListStatus.INACTIVE,
+        },
     }
     if include_claims:
         data["claims"] = [
-            {
-                "id": str(claim.id),
-                "receiver_name": claim.receiver.receiver_profile.display_name,
-                "claimed_at": claim.claimed_at.isoformat(),
-                "status": claim.status,
-            }
+            _serialize_claim(claim)
             for claim in food.claims.select_related("receiver__receiver_profile").order_by(
                 "-claimed_at"
             )
@@ -242,7 +325,10 @@ def _group_donations(
 def get_dashboard(user: User) -> dict:
     restaurant = get_restaurant_profile(user)
     foods = FoodItem.objects.filter(restaurant=restaurant)
-    claims = FoodClaim.objects.filter(restaurant=restaurant, status=ClaimStatus.CLAIMED)
+    claims = FoodClaim.objects.filter(
+        restaurant=restaurant,
+        status__in=COUNTED_CLAIM_STATUSES,
+    )
 
     now = now_sgt()
     today = today_sgt()
@@ -395,7 +481,7 @@ def list_donations(user: User, status: str = "active") -> dict:
         meals_this_week = (
             FoodClaim.objects.filter(
                 restaurant=restaurant,
-                status=ClaimStatus.CLAIMED,
+                status__in=COUNTED_CLAIM_STATUSES,
                 claim_date__gte=week_start,
                 claim_date__lt=week_end,
             ).aggregate(total=Sum("quantity_claimed"))["total"]
@@ -447,8 +533,86 @@ def list_donations(user: User, status: str = "active") -> dict:
     }
 
 
+def _category_label(category: str) -> str:
+    try:
+        return FoodCategory(category).label
+    except ValueError:
+        return category.title()
+
+
+def _estimate_receiver_reach(restaurant: RestaurantProfile) -> dict:
+    radius_km = float(settings.DEFAULT_BROWSE_RADIUS_KM)
+    lat = float(restaurant.latitude)
+    lng = float(restaurant.longitude)
+    min_lat, max_lat, min_lng, max_lng = bounding_box(lat, lng, radius_km)
+
+    candidates = ReceiverProfile.objects.filter(
+        latitude__isnull=False,
+        longitude__isnull=False,
+        latitude__gte=min_lat,
+        latitude__lte=max_lat,
+        longitude__gte=min_lng,
+        longitude__lte=max_lng,
+    ).only("latitude", "longitude")
+
+    radius_m = radius_km * 1000
+    count = 0
+    for receiver in candidates:
+        distance_m = haversine_distance_m(
+            lat,
+            lng,
+            float(receiver.latitude),
+            float(receiver.longitude),
+        )
+        if distance_m <= radius_m:
+            count += 1
+
+    return {
+        "count": count,
+        "radius_km": int(radius_km) if radius_km.is_integer() else radius_km,
+    }
+
+
+def _build_post_success_payload(
+    food: FoodItem,
+    restaurant: RestaurantProfile,
+    request=None,
+) -> dict:
+    reach = _estimate_receiver_reach(restaurant)
+    radius = reach["radius_km"]
+    count = reach["count"]
+    category_label = _category_label(food.category)
+    unit = food.unit or "packs"
+    address_short = restaurant.address.split(",")[0].strip() if restaurant.address else ""
+
+    return {
+        "success_message": "Donation posted",
+        "success_subtitle": "Receivers nearby will be notified within seconds.",
+        "estimated_reach": count,
+        "estimated_reach_radius_km": radius,
+        "estimated_reach_label": (
+            f"~{count} receivers within {radius} km will see this."
+        ),
+        "restaurant": {
+            "id": str(restaurant.id),
+            "name": restaurant.name,
+            "address": restaurant.address,
+            "address_short": address_short,
+        },
+        "summary": {
+            "title": food.name,
+            "subtitle": f"{food.quantity_original} {unit} · {category_label}",
+            "category_label": category_label,
+            "pickup_window_label": format_pickup_window(food.pickup_start, food.pickup_end),
+            "location_label": restaurant.name,
+            "address_short": address_short,
+        },
+        "photo_url": _absolute_photo_url(request, food.photo_url or None),
+    }
+
+
 @transaction.atomic
-def create_donation(user: User, data: dict) -> dict:
+def create_donation(user: User, data: dict, request=None) -> dict:
     restaurant = get_restaurant_profile(user)
 
     now = now_sgt()
@@ -458,17 +622,28 @@ def create_donation(user: User, data: dict) -> dict:
             message="Pickup end must be in the future.",
             http_status=400,
         )
+    if data["pickup_end"] <= data["pickup_start"]:
+        raise PeonyAPIException(
+            code="INVALID_PICKUP_WINDOW",
+            message="Pickup end must be after pickup start.",
+            http_status=400,
+        )
 
     recurrence_type = data.get("recurrence_type", RecurrenceType.NONE)
     recurrence_days = _validate_recurrence(recurrence_type, data.get("recurrence_days"))
+
+    photo_url = data.get("photo_url", "") or ""
+    uploaded_photo = data.get("photo")
+    if uploaded_photo is not None:
+        photo_url = save_food_item_photo(str(restaurant.id), uploaded_photo)
 
     food = FoodItem.objects.create(
         restaurant=restaurant,
         name=data["name"],
         description=data.get("description", ""),
         category=data["category"],
-        unit=data.get("unit", "pack"),
-        photo_url=data.get("photo_url", ""),
+        unit=data.get("unit", "packs"),
+        photo_url=photo_url,
         quantity_original=data["quantity"],
         quantity_available=data["quantity"],
         quantity_claimed=0,
@@ -478,6 +653,7 @@ def create_donation(user: User, data: dict) -> dict:
         pickup_end=data["pickup_end"],
         recurrence_type=recurrence_type,
         recurrence_days=recurrence_days,
+        source_note=data.get("source_note", ""),
     )
     food.food_qr_data = _generate_qr_data(food)
     food.save(update_fields=["food_qr_data", "updated_at"])
@@ -486,7 +662,7 @@ def create_donation(user: User, data: dict) -> dict:
     restaurant.save(update_fields=["total_food_shared"])
 
     result = _serialize_restaurant_donation(food)
-    result["estimated_reach"] = data["quantity"] * 3
+    result.update(_build_post_success_payload(food, restaurant, request=request))
     return result
 
 
@@ -515,13 +691,6 @@ def update_donation(user: User, food_id: str, data: dict) -> dict:
             http_status=404,
         ) from exc
 
-    if food.claims.exists():
-        raise PeonyAPIException(
-            code="DONATION_HAS_CLAIMS",
-            message="Cannot edit a donation that already has claims.",
-            http_status=409,
-        )
-
     if food.list_status != ListStatus.ACTIVE:
         raise PeonyAPIException(
             code="DONATION_NOT_EDITABLE",
@@ -529,13 +698,32 @@ def update_donation(user: User, food_id: str, data: dict) -> dict:
             http_status=409,
         )
 
-    for field in ("name", "description", "category", "unit", "photo_url"):
+    has_claims = food.claims.exists()
+    for field in ("name", "description", "category", "unit", "photo_url", "source_note"):
         if field in data:
+            if has_claims and field in ("name", "category", "unit"):
+                raise PeonyAPIException(
+                    code="DONATION_HAS_CLAIMS",
+                    message="Cannot change name, category, or unit after claims exist.",
+                    http_status=409,
+                )
             setattr(food, field, data[field])
 
     if "quantity" in data:
+        if data["quantity"] < food.quantity_claimed:
+            raise PeonyAPIException(
+                code="INVALID_QUANTITY",
+                message="Quantity cannot be less than already claimed portions.",
+                http_status=400,
+            )
         food.quantity_original = data["quantity"]
-        food.quantity_available = data["quantity"]
+        food.quantity_available = max(data["quantity"] - food.quantity_claimed, 0)
+        if food.quantity_available <= 0:
+            food.status = FoodStatus.FULLY_CLAIMED
+        elif food.quantity_claimed > 0:
+            food.status = FoodStatus.PARTIALLY_CLAIMED
+        else:
+            food.status = FoodStatus.AVAILABLE
 
     if "pickup_start" in data:
         food.pickup_start = data["pickup_start"]
@@ -627,10 +815,10 @@ def delete_donation(user: User, food_id: str) -> dict:
             http_status=404,
         ) from exc
 
-    if food.list_status != ListStatus.INACTIVE:
+    if food.list_status not in (ListStatus.ACTIVE, ListStatus.INACTIVE):
         raise PeonyAPIException(
-            code="DONATION_NOT_INACTIVE",
-            message="Only inactive donations can be deleted.",
+            code="DONATION_NOT_DELETABLE",
+            message="Only active or inactive donations can be deleted.",
             http_status=409,
         )
 
@@ -648,18 +836,57 @@ def get_approval_status(user: User) -> dict:
     }
 
 
-def get_restaurant_profile_data(user: User) -> dict:
+def get_restaurant_profile_data(user: User, request=None) -> dict:
     restaurant = get_restaurant_profile(user)
-    return _serialize_restaurant_profile(restaurant)
+    return _serialize_restaurant_profile(restaurant, request=request)
 
 
-def update_restaurant_profile_data(user: User, data: dict) -> dict:
+def _format_opening_hours_text(
+    opens_at,
+    closes_at,
+    open_days: list[int],
+) -> str:
+    if not opens_at or not closes_at:
+        return ""
+    open_label = opens_at.strftime("%I:%M %p").lstrip("0")
+    close_label = closes_at.strftime("%I:%M %p").lstrip("0")
+    if open_days and sorted(open_days) != list(range(7)):
+        days = ", ".join(WEEKDAY_LABELS[day] for day in sorted(open_days) if 0 <= day <= 6)
+        return f"{days} {open_label} – {close_label}"
+    return f"{open_label} – {close_label}"
+
+
+def _validate_open_days(open_days: list | None) -> list[int]:
+    days = open_days or []
+    normalized: list[int] = []
+    for day in days:
+        try:
+            value = int(day)
+        except (TypeError, ValueError) as exc:
+            raise PeonyAPIException(
+                code="INVALID_OPEN_DAYS",
+                message="open_days must be integers 0–6 (Mon–Sun).",
+                http_status=400,
+            ) from exc
+        if value < 0 or value > 6:
+            raise PeonyAPIException(
+                code="INVALID_OPEN_DAYS",
+                message="open_days must be integers 0–6 (Mon–Sun).",
+                http_status=400,
+            )
+        if value not in normalized:
+            normalized.append(value)
+    return sorted(normalized)
+
+
+def update_restaurant_profile_data(user: User, data: dict, request=None) -> dict:
     restaurant = get_restaurant_profile(user)
 
     profile_fields = (
         "name",
         "contact_name",
         "contact_email",
+        "cuisine",
         "opening_hours",
         "about",
         "photo_url",
@@ -672,6 +899,36 @@ def update_restaurant_profile_data(user: User, data: dict) -> dict:
         phone = data["contact_phone"]
         restaurant.contact_phone = (
             normalize_phone_e164(phone) if phone and str(phone).strip() else ""
+        )
+
+    structured_hours_touched = False
+    if "opens_at" in data:
+        restaurant.opens_at = data["opens_at"]
+        structured_hours_touched = True
+    if "closes_at" in data:
+        restaurant.closes_at = data["closes_at"]
+        structured_hours_touched = True
+    if "open_days" in data:
+        restaurant.open_days = _validate_open_days(data["open_days"])
+        structured_hours_touched = True
+
+    if structured_hours_touched and "opening_hours" not in data:
+        restaurant.opening_hours = _format_opening_hours_text(
+            restaurant.opens_at,
+            restaurant.closes_at,
+            restaurant.open_days or [],
+        )
+
+    if data.get("remove_photo"):
+        if restaurant.photo_url:
+            delete_stored_photo(restaurant.photo_url)
+        restaurant.photo_url = ""
+    elif data.get("photo") is not None:
+        if restaurant.photo_url:
+            delete_stored_photo(restaurant.photo_url)
+        restaurant.photo_url = save_restaurant_profile_photo(
+            str(restaurant.id),
+            data["photo"],
         )
 
     if "address" in data or "latitude" in data or "longitude" in data:
@@ -690,7 +947,7 @@ def update_restaurant_profile_data(user: User, data: dict) -> dict:
         restaurant.longitude = lng
 
     restaurant.save()
-    return _serialize_restaurant_profile(restaurant)
+    return _serialize_restaurant_profile(restaurant, request=request)
 
 
 def get_public_restaurant(restaurant_id: str) -> dict:
@@ -705,7 +962,22 @@ def get_public_restaurant(restaurant_id: str) -> dict:
     return _serialize_restaurant_profile(restaurant, public=True)
 
 
-def _serialize_restaurant_profile(restaurant: RestaurantProfile, public: bool = False) -> dict:
+def _absolute_photo_url(request, photo_url: str | None) -> str | None:
+    if not photo_url:
+        return None
+    if photo_url.startswith("http://") or photo_url.startswith("https://"):
+        return photo_url
+    if request is None:
+        return photo_url
+    return request.build_absolute_uri(photo_url)
+
+
+def _serialize_restaurant_profile(
+    restaurant: RestaurantProfile,
+    public: bool = False,
+    request=None,
+) -> dict:
+    open_days = restaurant.open_days or []
     data = {
         "id": str(restaurant.id),
         "name": restaurant.name,
@@ -713,9 +985,14 @@ def _serialize_restaurant_profile(restaurant: RestaurantProfile, public: bool = 
         "postal_code": restaurant.postal_code,
         "latitude": float(restaurant.latitude),
         "longitude": float(restaurant.longitude),
+        "cuisine": restaurant.cuisine,
         "opening_hours": restaurant.opening_hours,
+        "opens_at": restaurant.opens_at.isoformat() if restaurant.opens_at else None,
+        "closes_at": restaurant.closes_at.isoformat() if restaurant.closes_at else None,
+        "open_days": open_days,
+        "open_days_labels": [WEEKDAY_LABELS[day] for day in open_days if 0 <= day <= 6],
         "about": restaurant.about,
-        "photo_url": restaurant.photo_url,
+        "photo_url": _absolute_photo_url(request, restaurant.photo_url or None),
         "is_verified": restaurant.is_verified,
         "total_food_shared": restaurant.total_food_shared,
         "initials": _initials(restaurant.name),
@@ -724,6 +1001,7 @@ def _serialize_restaurant_profile(restaurant: RestaurantProfile, public: bool = 
         data.update(
             {
                 "uen": restaurant.uen,
+                "uen_verified": True,
                 "contact_name": restaurant.contact_name,
                 "contact_email": restaurant.contact_email,
                 "contact_phone": restaurant.contact_phone,

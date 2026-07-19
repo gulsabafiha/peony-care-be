@@ -140,6 +140,8 @@ class TestDonorRestaurants:
         assert menu_data["restaurant_name"] == restaurant_profile.name
         assert len(menu_data["menu_items"]) == 1
         assert menu_data["menu_items"][0]["name"] == "Chicken Rice"
+        assert menu_data["menu_photos"] == []
+        assert menu_data["menu_photo_count"] == 0
 
 
 class TestMealOrders:

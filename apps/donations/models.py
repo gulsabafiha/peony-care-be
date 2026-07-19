@@ -46,6 +46,7 @@ class FoodItem(models.Model):
         default=RecurrenceType.NONE,
     )
     recurrence_days = models.JSONField(default=list, blank=True)
+    source_note = models.TextField(blank=True, default="")
     food_qr_data = models.CharField(max_length=200, blank=True)
     food_qr_image_url = models.URLField(max_length=500, blank=True)
     sponsorship_type = models.CharField(
@@ -154,3 +155,27 @@ class MenuItem(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class MenuPhoto(models.Model):
+    """Gallery photos of a restaurant menu board / dishes shown to donors."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    restaurant = models.ForeignKey(
+        RestaurantProfile,
+        on_delete=models.CASCADE,
+        related_name="menu_photos",
+    )
+    photo_url = models.URLField(max_length=500)
+    sort_order = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "menu_photos"
+        ordering = ["sort_order", "created_at"]
+        indexes = [
+            models.Index(fields=["restaurant", "sort_order"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"MenuPhoto {self.sort_order} ({self.restaurant_id})"

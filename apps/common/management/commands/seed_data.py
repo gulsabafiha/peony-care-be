@@ -15,7 +15,7 @@ from apps.accounts.models import (
     RestaurantProfile,
     User,
 )
-from apps.claims.models import FoodClaim
+from apps.claims.models import ClaimReportReasonOption, FoodClaim
 from apps.common.choices import (
     ClaimStatus,
     CreditPreference,
@@ -51,6 +51,14 @@ REPORT_REASONS = [
     ("rude-behaviour", "Rude or inappropriate behaviour", 4),
     ("asked-to-pay", "Asked me to pay for the food", 5),
     ("other", "Something else", 6),
+]
+
+CLAIM_REPORT_REASONS = [
+    ("abusive-or-rude", "Receiver was abusive or rude", 1),
+    ("repeated-no-shows", "Repeated no-shows", 2),
+    ("fake-or-duplicate", "Suspected fake or duplicate account", 3),
+    ("tried-to-resell", "Tried to resell the food", 4),
+    ("other", "Something else", 5),
 ]
 
 RESTAURANTS = [
@@ -246,6 +254,11 @@ class Command(BaseCommand):
     def _seed_report_reasons(self):
         for code, label, sort_order in REPORT_REASONS:
             FoodReportReasonOption.objects.get_or_create(
+                code=code,
+                defaults={"label": label, "sort_order": sort_order, "is_active": True},
+            )
+        for code, label, sort_order in CLAIM_REPORT_REASONS:
+            ClaimReportReasonOption.objects.get_or_create(
                 code=code,
                 defaults={"label": label, "sort_order": sort_order, "is_active": True},
             )

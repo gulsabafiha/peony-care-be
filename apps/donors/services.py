@@ -10,7 +10,7 @@ from django.db import transaction
 from apps.accounts.models import DonorProfile, RestaurantProfile, User
 from apps.claims.models import FoodClaim
 from apps.common.choices import (
-    ClaimStatus,
+    COUNTED_CLAIM_STATUSES,
     CreditPreference,
     FoodCategory,
     FoodStatus,
@@ -21,6 +21,7 @@ from apps.common.choices import (
 )
 from apps.common.exceptions import PeonyAPIException
 from apps.common.timezone_utils import format_pickup_window, now_sgt
+from apps.donations.menu_photo_services import list_public_menu_photos
 from apps.donations.models import FoodItem, MenuItem
 from apps.donors.models import MealOrder, MealOrderItem, MoneyDonation
 
@@ -101,7 +102,7 @@ def update_credit_preference(user: User, credit_preference: str) -> dict:
 def _count_lives_impacted(donor: DonorProfile) -> int:
     return FoodClaim.objects.filter(
         food__individual_donor=donor,
-        status=ClaimStatus.CLAIMED,
+        status__in=COUNTED_CLAIM_STATUSES,
     ).count()
 
 
@@ -272,10 +273,13 @@ def get_restaurant_menu(restaurant_id: str) -> dict:
         }
         for item in restaurant.menu_items.filter(is_available=True).order_by("sort_order", "name")
     ]
+    menu_photos = list_public_menu_photos(restaurant)
     return {
         "restaurant_id": str(restaurant.id),
         "restaurant_name": restaurant.name,
         "menu_items": menu_items,
+        "menu_photos": menu_photos,
+        "menu_photo_count": len(menu_photos),
     }
 
 

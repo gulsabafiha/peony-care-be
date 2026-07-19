@@ -82,10 +82,19 @@ class RestaurantMenuItemSerializer(serializers.Serializer):
     sort_order = serializers.IntegerField()
 
 
+class DonorMenuPhotoSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    photo_url = serializers.CharField()
+    sort_order = serializers.IntegerField()
+    position = serializers.IntegerField()
+
+
 class RestaurantMenuSerializer(serializers.Serializer):
     restaurant_id = serializers.UUIDField()
     restaurant_name = serializers.CharField()
     menu_items = RestaurantMenuItemSerializer(many=True)
+    menu_photos = DonorMenuPhotoSerializer(many=True, required=False)
+    menu_photo_count = serializers.IntegerField(required=False)
 
 
 class MealOrderItemInputSerializer(serializers.Serializer):

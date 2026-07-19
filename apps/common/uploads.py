@@ -14,7 +14,7 @@ ALLOWED_PROFILE_PHOTO_CONTENT_TYPES = {
 }
 
 
-def save_receiver_profile_photo(user_id: str, uploaded_file) -> str:
+def _save_profile_photo(prefix: str, owner_id: str, uploaded_file) -> str:
     content_type = getattr(uploaded_file, "content_type", "") or ""
     extension = ALLOWED_PROFILE_PHOTO_CONTENT_TYPES.get(content_type)
     if extension is None:
@@ -32,9 +32,25 @@ def save_receiver_profile_photo(user_id: str, uploaded_file) -> str:
             http_status=400,
         )
 
-    filename = f"receivers/{user_id}/{uuid.uuid4()}.{extension}"
+    filename = f"{prefix}/{owner_id}/{uuid.uuid4()}.{extension}"
     saved_path = default_storage.save(filename, uploaded_file)
     return default_storage.url(saved_path)
+
+
+def save_receiver_profile_photo(user_id: str, uploaded_file) -> str:
+    return _save_profile_photo("receivers", user_id, uploaded_file)
+
+
+def save_restaurant_profile_photo(restaurant_id: str, uploaded_file) -> str:
+    return _save_profile_photo("restaurants", restaurant_id, uploaded_file)
+
+
+def save_food_item_photo(restaurant_id: str, uploaded_file) -> str:
+    return _save_profile_photo("foods", restaurant_id, uploaded_file)
+
+
+def save_menu_photo(restaurant_id: str, uploaded_file) -> str:
+    return _save_profile_photo("menu-photos", restaurant_id, uploaded_file)
 
 
 def delete_stored_photo(photo_url: str) -> None:
