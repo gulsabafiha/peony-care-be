@@ -12,7 +12,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U peony -d peony"]
       interval: 10s
-      timeout: 5s=
+      timeout: 5s
       retries: 5
 
   web:

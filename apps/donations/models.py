@@ -2,14 +2,15 @@ import uuid
 
 from django.db import models
 
+from apps.accounts.models import DonorProfile, RestaurantProfile, User
 from apps.common.choices import (
     ClosedReason,
     FoodCategory,
     FoodStatus,
     ListStatus,
+    RecurrenceType,
     SponsorshipType,
 )
-from apps.accounts.models import DonorProfile, RestaurantProfile, User
 
 
 class FoodItem(models.Model):
@@ -39,6 +40,12 @@ class FoodItem(models.Model):
     )
     pickup_start = models.DateTimeField()
     pickup_end = models.DateTimeField()
+    recurrence_type = models.CharField(
+        max_length=20,
+        choices=RecurrenceType.choices,
+        default=RecurrenceType.NONE,
+    )
+    recurrence_days = models.JSONField(default=list, blank=True)
     food_qr_data = models.CharField(max_length=200, blank=True)
     food_qr_image_url = models.URLField(max_length=500, blank=True)
     sponsorship_type = models.CharField(

@@ -7,8 +7,9 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import RestaurantProfile, User
-from apps.common.choices import ListStatus, UserRole
+from apps.common.choices import ClosedReason, FoodStatus, ListStatus, UserRole
 from apps.donations.models import FoodItem
+from apps.notifications.models import Notification
 
 pytestmark = pytest.mark.django_db
 
@@ -53,9 +54,33 @@ def auth_client(api_client, user):
 class TestRestaurantDonations:
     def test_dashboard(self, api_client, restaurant_user):
         client = auth_client(api_client, restaurant_user)
+        now = timezone.now()
+        client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Chicken Rice",
+                "category": "RICE",
+                "quantity": 5,
+                "pickup_start": now.isoformat(),
+                "pickup_end": (now + timedelta(hours=2)).isoformat(),
+                "recurrence_type": "DAILY",
+            },
+            format="json",
+        )
         response = client.get(reverse("restaurant_donations:restaurant-dashboard"))
         assert response.status_code == 200
-        assert "active_count" in response.json()["data"]
+        data = response.json()["data"]
+        assert data["active_count"] == 1
+        assert data["restaurant"]["name"] == "Tian Tian Hainanese"
+        assert data["restaurant"]["initials"] == "TT"
+        assert "impact" in data
+        assert "week_over_week_pct" in data["impact"]
+        assert "today" in data
+        assert "this_week" in data
+        assert data["today"]["active_count"] == 1
+        assert data["unread_alerts_count"] == 0
+        assert data["active_donations"]["groups"]
+        assert data["today_listings"][0]["recurrence_label"] == "Daily"
 
     def test_create_and_list_donation(self, api_client, restaurant_user):
         client = auth_client(api_client, restaurant_user)
@@ -69,6 +94,8 @@ class TestRestaurantDonations:
                 "quantity": 5,
                 "pickup_start": now.isoformat(),
                 "pickup_end": (now + timedelta(hours=2)).isoformat(),
+                "recurrence_type": "CUSTOM",
+                "recurrence_days": [0, 1, 2, 3, 4, 5],
             },
             format="json",
         )
@@ -76,13 +103,20 @@ class TestRestaurantDonations:
         data = response.json()["data"]
         assert data["food_qr_data"]
         assert "|" in data["food_qr_data"]
+        assert data["recurrence_label"] == "Mon, Tue, Wed, Thu, Fri, Sat"
+        assert data["percent_claimed"] == 0
 
         list_response = client.get(
             reverse("restaurant_donations:restaurant-donations"),
             {"status": "active"},
         )
         assert list_response.status_code == 200
-        assert len(list_response.json()["data"]) == 1
+        payload = list_response.json()["data"]
+        assert payload["summary"]["active_count"] == 1
+        assert payload["summary"]["past_count"] == 0
+        assert payload["summary"]["inactive_count"] == 0
+        assert len(payload["groups"]) == 1
+        assert len(payload["groups"][0]["items"]) == 1
 
     def test_restaurant_can_post_without_admin_approval(self, api_client):
         user = User.objects.create_user(
@@ -137,7 +171,20 @@ class TestRestaurantDonations:
             reverse("restaurant_donations:restaurant-donation-close", kwargs={"food_id": food_id})
         )
         assert close.status_code == 200
-        assert close.json()["data"]["list_status"] == ListStatus.INACTIVE
+        closed = close.json()["data"]
+        assert closed["list_status"] == ListStatus.INACTIVE
+        assert closed["paused_ago"]
+        assert closed["closed_at"]
+
+        inactive_list = client.get(
+            reverse("restaurant_donations:restaurant-donations"),
+            {"status": "inactive"},
+        )
+        assert inactive_list.status_code == 200
+        inactive_payload = inactive_list.json()["data"]
+        assert inactive_payload["summary"]["inactive_count"] == 1
+        assert inactive_payload["summary"]["subtitle"]
+        assert len(inactive_payload["groups"][0]["items"]) == 1
 
         reactivate = client.post(
             reverse(
@@ -210,6 +257,75 @@ class TestRestaurantDonations:
         assert data["quantity_available"] == 6
 
 
+class TestRestaurantDonationsPast:
+    def test_past_list_grouped_with_summary(self, api_client, restaurant_user):
+        restaurant = restaurant_user.restaurant_profile
+        now = timezone.now()
+        FoodItem.objects.create(
+            restaurant=restaurant,
+            name="Nasi Lemak",
+            category="RICE",
+            quantity_original=8,
+            quantity_available=0,
+            quantity_claimed=8,
+            status=FoodStatus.FULLY_CLAIMED,
+            list_status=ListStatus.PAST,
+            pickup_start=now - timedelta(days=1, hours=2),
+            pickup_end=now - timedelta(days=1),
+            closed_at=now - timedelta(days=1),
+            closed_reason=ClosedReason.FULLY_CLAIMED,
+        )
+        FoodItem.objects.create(
+            restaurant=restaurant,
+            name="Bread Set",
+            category="BREAD",
+            quantity_original=6,
+            quantity_available=0,
+            quantity_claimed=4,
+            status=FoodStatus.EXPIRED,
+            list_status=ListStatus.PAST,
+            pickup_start=now - timedelta(days=2, hours=2),
+            pickup_end=now - timedelta(days=2),
+            closed_at=now - timedelta(days=2),
+            closed_reason=ClosedReason.EXPIRED,
+        )
+
+        client = auth_client(api_client, restaurant_user)
+        response = client.get(
+            reverse("restaurant_donations:restaurant-donations"),
+            {"status": "past"},
+        )
+        assert response.status_code == 200
+        payload = response.json()["data"]
+        assert payload["summary"]["past_count"] == 2
+        assert payload["summary"]["meals_this_week"] is not None
+        assert len(payload["groups"]) >= 1
+        items = [item for group in payload["groups"] for item in group["items"]]
+        bread = next(item for item in items if item["name"] == "Bread Set")
+        assert bread["percent_claimed"] == 67
+        assert bread["expired_count"] == 2
+        nasi = next(item for item in items if item["name"] == "Nasi Lemak")
+        assert nasi["is_done"] is True
+        assert nasi["percent_claimed"] == 100
+
+
+class TestNotificationsUnreadCount:
+    def test_unread_count(self, api_client, restaurant_user):
+        Notification.objects.create(
+            user=restaurant_user,
+            type="FOOD_CLAIMED",
+            title="New claim",
+            body="Someone claimed your food",
+        )
+        client = auth_client(api_client, restaurant_user)
+        response = client.get(reverse("notifications-unread-count"))
+        assert response.status_code == 200
+        assert response.json()["data"]["unread_count"] == 1
+
+        dashboard = client.get(reverse("restaurant_donations:restaurant-dashboard"))
+        assert dashboard.json()["data"]["unread_alerts_count"] == 1
+
+
 class TestRestaurantProfile:
     def test_profile_and_approval_status(self, api_client, restaurant_user):
         client = auth_client(api_client, restaurant_user)
@@ -217,6 +333,7 @@ class TestRestaurantProfile:
         profile = client.get(reverse("restaurant_donations:restaurant-profile"))
         assert profile.status_code == 200
         assert profile.json()["data"]["name"] == "Tian Tian Hainanese"
+        assert profile.json()["data"]["initials"] == "TT"
 
         status = client.get(reverse("restaurant_donations:restaurant-approval-status"))
         assert status.status_code == 200

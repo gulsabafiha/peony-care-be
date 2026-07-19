@@ -69,6 +69,12 @@ class ClosedReason(models.TextChoices):
     FULLY_CLAIMED = "FULLY_CLAIMED", "Fully Claimed"
 
 
+class RecurrenceType(models.TextChoices):
+    NONE = "NONE", "None"
+    DAILY = "DAILY", "Daily"
+    CUSTOM = "CUSTOM", "Custom"
+
+
 class LocationPlaceType(models.TextChoices):
     FOOD_CENTRE = "FOOD_CENTRE", "Food centre"
     RESTAURANT = "RESTAURANT", "Restaurant"

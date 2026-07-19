@@ -11,6 +11,7 @@ from apps.donations.restaurant_serializers import (
     CreateDonationSerializer,
     DashboardSerializer,
     DonationListQuerySerializer,
+    DonationListResponseSerializer,
     RestaurantDonationSerializer,
     RestaurantProfileSerializer,
     RestaurantProfileUpdateSerializer,
@@ -23,7 +24,7 @@ class DashboardView(GenericAPIView):
 
     @extend_schema(
         tags=["Restaurant"],
-        summary="Dashboard home counts",
+        summary="Restaurant home dashboard",
         responses={200: enveloped_schema(DashboardSerializer, "RestaurantDashboardEnvelope")},
     )
     def get(self, request):
@@ -37,7 +38,7 @@ class DonationListCreateView(GenericAPIView):
     @extend_schema(
         tags=["Restaurant"],
         operation_id="v1_restaurant_donations_list",
-        summary="List donations by status",
+        summary="List donations by status with tab counts and date groups",
         parameters=[
             OpenApiParameter(
                 "status",
@@ -47,7 +48,7 @@ class DonationListCreateView(GenericAPIView):
             )
         ],
         responses={
-            200: enveloped_schema(RestaurantDonationSerializer, "DonationListEnvelope", many=True)
+            200: enveloped_schema(DonationListResponseSerializer, "DonationListEnvelope")
         },
     )
     def get(self, request):
