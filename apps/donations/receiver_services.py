@@ -206,18 +206,38 @@ def get_food_detail(food_id: str, lat: float, lng: float) -> dict:
 
 
 def _serialize_meal_summary(food: FoodItem) -> dict:
+    from apps.common.choices import SponsorshipType
+    from apps.donations.restaurant_services import _initials
+
+    is_sponsored = food.sponsorship_type != SponsorshipType.DIRECT
+    sponsor = food.sponsor_display_name or None
+    title = f"{food.name} · Sponsored" if is_sponsored else food.name
+    packs = food.quantity_original
+    unit = food.unit or "pack"
+    unit_label = f"{packs} {unit}{'s' if packs != 1 else ''}"
+    if is_sponsored and sponsor:
+        subtitle = f"{unit_label} · by {sponsor}"
+    else:
+        subtitle = f"{unit_label} · pickup {format_pickup_window(food.pickup_start, food.pickup_end)}"
     return {
         "id": str(food.id),
         "name": food.name,
+        "title": title,
+        "subtitle": subtitle,
         "description": food.description,
         "category": food.category,
         "photo_url": food.photo_url or None,
         "quantity_available": food.quantity_available,
+        "quantity_original": food.quantity_original,
+        "quantity_left_label": f"{food.quantity_available} left",
+        "unit": unit,
         "pickup_start": food.pickup_start.isoformat(),
         "pickup_end": food.pickup_end.isoformat(),
         "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
         "sponsorship_type": food.sponsorship_type,
-        "sponsor_display_name": food.sponsor_display_name or None,
+        "is_sponsored": is_sponsored,
+        "sponsor_display_name": sponsor,
+        "sponsor_initials": _initials(sponsor) if sponsor else None,
     }
 
 
@@ -226,7 +246,9 @@ def _meal_category_labels(foods: list[FoodItem]) -> list[str]:
     return [FoodCategory(category).label for category in categories]
 
 
-def get_restaurant_detail(restaurant_id: str, lat: float, lng: float) -> dict:
+def get_restaurant_detail(restaurant_id: str, lat: float, lng: float, request=None) -> dict:
+    from apps.donations.restaurant_services import _serialize_restaurant_detail_page
+
     try:
         restaurant = RestaurantProfile.objects.select_related("user").get(id=restaurant_id)
     except RestaurantProfile.DoesNotExist as exc:
@@ -241,31 +263,20 @@ def get_restaurant_detail(restaurant_id: str, lat: float, lng: float) -> dict:
         .filter(restaurant=restaurant)
         .order_by("pickup_start", "name")
     )
-    distance_m = haversine_distance_m(
-        lat,
-        lng,
-        float(restaurant.latitude),
-        float(restaurant.longitude),
+    data = _serialize_restaurant_detail_page(
+        restaurant,
+        request=request,
+        include_meals=False,
+        lat=lat,
+        lng=lng,
     )
-    contact_phone = restaurant.contact_phone or restaurant.user.phone_e164
-
-    return {
-        "id": str(restaurant.id),
-        "name": restaurant.name,
-        "address": restaurant.address,
-        "postal_code": restaurant.postal_code,
-        "latitude": float(restaurant.latitude),
-        "longitude": float(restaurant.longitude),
-        "photo_url": restaurant.photo_url or None,
-        "about": restaurant.about,
-        "opening_hours": restaurant.opening_hours,
-        "contact_phone": contact_phone,
-        "is_verified": restaurant.is_verified,
-        "distance_km": round(distance_m / 1000, 1),
-        "active_meal_count": len(foods),
-        "categories": _meal_category_labels(foods),
-        "available_meals": [_serialize_meal_summary(food) for food in foods],
-    }
+    data["categories"] = _meal_category_labels(foods)
+    data["available_meals"] = [_serialize_meal_summary(food) for food in foods]
+    data["active_meal_count"] = len(foods)
+    data["available_now_label"] = (
+        f"{len(foods)} item{'s' if len(foods) != 1 else ''}" if foods else "0 items"
+    )
+    return data
 
 
 def list_food_report_reasons() -> list[dict]:

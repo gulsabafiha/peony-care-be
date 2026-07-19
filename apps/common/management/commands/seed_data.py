@@ -562,6 +562,9 @@ class Command(BaseCommand):
                 "email_enabled": False,
                 "alert_new_claim": True,
                 "alert_sponsored": True,
+                "alert_all_claimed": True,
+                "alert_window_expiring": True,
+                "alert_no_show": True,
             },
         )
 

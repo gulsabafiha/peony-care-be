@@ -21,9 +21,10 @@ class NotificationSettingsAdmin(admin.ModelAdmin):
         "email_enabled",
         "alert_new_claim",
         "alert_sponsored",
+        "alert_no_show",
         "updated_at",
     )
-    list_filter = ("push_enabled", "email_enabled")
+    list_filter = ("push_enabled", "email_enabled", "alert_no_show")
     search_fields = ("user__phone_e164",)
     readonly_fields = ("id", "updated_at")
     autocomplete_fields = ("user",)

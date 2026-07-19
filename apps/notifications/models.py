@@ -42,6 +42,7 @@ class NotificationSettings(models.Model):
     alert_sponsored = models.BooleanField(default=True)
     alert_all_claimed = models.BooleanField(default=True)
     alert_window_expiring = models.BooleanField(default=True)
+    alert_no_show = models.BooleanField(default=True)
     alert_donation_claimed = models.BooleanField(default=True)
     alert_receipts = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -177,6 +177,99 @@ class RestaurantProfile(models.Model):
         return self.name
 
 
+class RestaurantDataExport(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        COMPLETED = "COMPLETED", "Completed"
+        FAILED = "FAILED", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="restaurant_data_exports",
+    )
+    phone_e164 = models.CharField(max_length=20)
+    email = models.EmailField(max_length=254, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    file_path = models.CharField(max_length=500, blank=True)
+    email_sent = models.BooleanField(default=False)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "restaurant_data_exports"
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["user", "requested_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"RestaurantDataExport({self.user_id}, {self.status})"
+
+
+class RestaurantLegalRetention(models.Model):
+    """UEN + contact kept for tax records after restaurant account deletion (90 days)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    former_user_id = models.UUIDField()
+    former_restaurant_id = models.UUIDField()
+    phone_e164 = models.CharField(max_length=20)
+    uen = models.CharField(max_length=20)
+    business_name = models.CharField(max_length=200)
+    contact_name = models.CharField(max_length=100, blank=True)
+    contact_email = models.EmailField(max_length=254, blank=True)
+    contact_phone = models.CharField(max_length=20, blank=True)
+    deleted_at = models.DateTimeField()
+    purge_after = models.DateTimeField()
+    purged_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "restaurant_legal_retentions"
+        ordering = ["-deleted_at"]
+        indexes = [
+            models.Index(fields=["purge_after"]),
+            models.Index(fields=["uen"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"LegalRetention({self.uen})"
+
+
+class RestaurantPayoutRetention(models.Model):
+    """Sponsored-order payout snapshots kept 7 years (ACRA) after account deletion."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    legal_retention = models.ForeignKey(
+        RestaurantLegalRetention,
+        on_delete=models.CASCADE,
+        related_name="payouts",
+    )
+    former_meal_order_id = models.UUIDField()
+    former_restaurant_id = models.UUIDField()
+    restaurant_uen = models.CharField(max_length=20)
+    restaurant_name = models.CharField(max_length=200)
+    donor_label = models.CharField(max_length=200, blank=True)
+    total_amount_sgd = models.DecimalField(max_digits=10, decimal_places=2)
+    credit_preference = models.CharField(max_length=20, blank=True)
+    status = models.CharField(max_length=20)
+    ordered_at = models.DateTimeField()
+    items = models.JSONField(default=list, blank=True)
+    retained_until = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "restaurant_payout_retentions"
+        ordering = ["-ordered_at"]
+        indexes = [
+            models.Index(fields=["retained_until"]),
+            models.Index(fields=["former_restaurant_id"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"PayoutRetention({self.former_meal_order_id})"
+
+
 class DonorProfile(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="donor_profile")

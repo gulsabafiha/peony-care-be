@@ -141,6 +141,20 @@ REGISTRATION_TOKEN_MAX_AGE_SECONDS = config(
 PAYNOW_UEN = config("PAYNOW_UEN", default="")
 PAYNOW_ACCOUNT_NAME = config("PAYNOW_ACCOUNT_NAME", default="Peony Care Ltd")
 
+# Email (console backend by default — configure SMTP in production)
+EMAIL_BACKEND = config(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.console.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="partners@peonycare.sg")
+DATA_EXPORT_EMAIL_ETA_HOURS = config("DATA_EXPORT_EMAIL_ETA_HOURS", default=48, cast=int)
+
+# Restaurant account deletion retention (PDPA / ACRA)
+RESTAURANT_UEN_RETENTION_DAYS = config("RESTAURANT_UEN_RETENTION_DAYS", default=90, cast=int)
+RESTAURANT_PAYOUT_RETENTION_YEARS = config(
+    "RESTAURANT_PAYOUT_RETENTION_YEARS", default=7, cast=int
+)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

@@ -47,6 +47,13 @@ urlpatterns = [
         ),
     ),
     path(
+        "api/v1/restaurant/",
+        include(
+            ("apps.accounts.restaurant_urls", "restaurant_accounts"),
+            namespace="restaurant_accounts",
+        ),
+    ),
+    path(
         "api/v1/restaurants/<uuid:restaurant_id>/",
         PublicRestaurantView.as_view(),
         name="public-restaurant",

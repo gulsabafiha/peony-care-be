@@ -139,6 +139,7 @@ class RestaurantDetailView(GenericAPIView):
             restaurant_id=str(restaurant_id),
             lat=lat,
             lng=lng,
+            request=request,
         )
         return success_response(data)
 

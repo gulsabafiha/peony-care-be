@@ -10,6 +10,7 @@ from django.db.models import Count, Q, Sum
 
 from apps.accounts.models import ReceiverProfile, RestaurantProfile, User
 from apps.claims.models import FoodClaim
+from apps.common.address import derive_area_label
 from apps.common.choices import (
     COUNTED_CLAIM_STATUSES,
     ClosedReason,
@@ -950,16 +951,21 @@ def update_restaurant_profile_data(user: User, data: dict, request=None) -> dict
     return _serialize_restaurant_profile(restaurant, request=request)
 
 
-def get_public_restaurant(restaurant_id: str) -> dict:
+def get_public_restaurant(restaurant_id: str, request=None) -> dict:
     try:
-        restaurant = RestaurantProfile.objects.get(id=restaurant_id)
+        restaurant = RestaurantProfile.objects.select_related("user").get(id=restaurant_id)
     except RestaurantProfile.DoesNotExist as exc:
         raise PeonyAPIException(
             code="RESTAURANT_NOT_FOUND",
             message="Restaurant not found.",
             http_status=404,
         ) from exc
-    return _serialize_restaurant_profile(restaurant, public=True)
+    return _serialize_restaurant_detail_page(restaurant, request=request, include_meals=True)
+
+
+def build_restaurant_impact_stats(restaurant: RestaurantProfile) -> dict:
+    """Lifetime FED / DONATIONS / CLAIM RATE for public + profile hub screens."""
+    return _profile_hub_stats(restaurant)
 
 
 def _absolute_photo_url(request, photo_url: str | None) -> str | None:
@@ -970,6 +976,169 @@ def _absolute_photo_url(request, photo_url: str | None) -> str | None:
     if request is None:
         return photo_url
     return request.build_absolute_uri(photo_url)
+
+
+def _profile_hub_stats(restaurant: RestaurantProfile) -> dict:
+    """Lifetime impact stats for profile hub + public details screens."""
+    people_fed = (
+        FoodClaim.objects.filter(
+            restaurant=restaurant,
+            status__in=COUNTED_CLAIM_STATUSES,
+        ).aggregate(total=Sum("quantity_claimed"))["total"]
+        or 0
+    )
+    donations_count = FoodItem.objects.filter(restaurant=restaurant).count()
+    total_original = (
+        FoodItem.objects.filter(restaurant=restaurant).aggregate(
+            total=Sum("quantity_original")
+        )["total"]
+        or 0
+    )
+    claim_rate_pct = round((people_fed / total_original) * 100) if total_original else None
+    return {
+        "people_fed": people_fed,
+        "people_fed_label": "fed",
+        "donations_count": donations_count,
+        "donations_label": "donations",
+        "claim_rate_pct": claim_rate_pct,
+        "claim_rate_display": "—" if claim_rate_pct is None else f"{claim_rate_pct}%",
+        "claim_rate_label": "claim rate",
+        # Reviews/ratings are not modeled yet — expose null so the UI can hide or stub.
+        "rating": None,
+        "rating_display": "—",
+        "review_count": 0,
+        "reviews_label": "reviews coming soon",
+        "reviews_available": False,
+    }
+
+
+def _hours_display(restaurant: RestaurantProfile) -> str:
+    if restaurant.opening_hours:
+        return restaurant.opening_hours
+    return _format_opening_hours_text(
+        restaurant.opens_at,
+        restaurant.closes_at,
+        restaurant.open_days or [],
+    )
+
+
+def _serialize_available_meal(food: FoodItem) -> dict:
+    is_sponsored = food.sponsorship_type != SponsorshipType.DIRECT
+    title = food.name
+    if is_sponsored:
+        title = f"{food.name} · Sponsored"
+    packs = food.quantity_original
+    unit = food.unit or "pack"
+    unit_label = f"{packs} {unit}{'s' if packs != 1 else ''}"
+    sponsor = food.sponsor_display_name or None
+    if is_sponsored and sponsor:
+        subtitle = f"{unit_label} · by {sponsor}"
+    else:
+        subtitle = f"{unit_label} · pickup {format_pickup_window(food.pickup_start, food.pickup_end)}"
+    return {
+        "id": str(food.id),
+        "name": food.name,
+        "title": title,
+        "subtitle": subtitle,
+        "description": food.description,
+        "category": food.category,
+        "photo_url": food.photo_url or None,
+        "quantity_available": food.quantity_available,
+        "quantity_original": food.quantity_original,
+        "quantity_left_label": f"{food.quantity_available} left",
+        "unit": unit,
+        "pickup_start": food.pickup_start.isoformat(),
+        "pickup_end": food.pickup_end.isoformat(),
+        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
+        "sponsorship_type": food.sponsorship_type,
+        "is_sponsored": is_sponsored,
+        "sponsor_display_name": sponsor,
+        "sponsor_initials": _initials(sponsor) if sponsor else None,
+    }
+
+
+def _serialize_restaurant_detail_page(
+    restaurant: RestaurantProfile,
+    *,
+    request=None,
+    include_meals: bool = False,
+    lat: float | None = None,
+    lng: float | None = None,
+) -> dict:
+    """Payload for screen 6.2 Rest Details (public + receiver)."""
+    hub = _profile_hub_stats(restaurant)
+    open_days = restaurant.open_days or []
+    contact_phone = restaurant.contact_phone
+    if not contact_phone and getattr(restaurant, "user", None):
+        contact_phone = restaurant.user.phone_e164
+
+    data = {
+        "id": str(restaurant.id),
+        "name": restaurant.name,
+        "address": restaurant.address,
+        "postal_code": restaurant.postal_code,
+        "area_label": derive_area_label(restaurant.address),
+        "latitude": float(restaurant.latitude),
+        "longitude": float(restaurant.longitude),
+        "cuisine": restaurant.cuisine,
+        "about": restaurant.about,
+        "opening_hours": _hours_display(restaurant),
+        "opens_at": restaurant.opens_at.isoformat() if restaurant.opens_at else None,
+        "closes_at": restaurant.closes_at.isoformat() if restaurant.closes_at else None,
+        "open_days": open_days,
+        "open_days_labels": [WEEKDAY_LABELS[day] for day in open_days if 0 <= day <= 6],
+        "photo_url": _absolute_photo_url(request, restaurant.photo_url or None),
+        "contact_phone": contact_phone or "",
+        "is_verified": restaurant.is_verified,
+        "verified_label": "Verified partner" if restaurant.is_verified else None,
+        "initials": _initials(restaurant.name),
+        "impact": {
+            "people_fed": hub["people_fed"],
+            "people_fed_label": hub["people_fed_label"],
+            "donations_count": hub["donations_count"],
+            "donations_label": hub["donations_label"],
+            "claim_rate_pct": hub["claim_rate_pct"],
+            "claim_rate_display": hub["claim_rate_display"],
+            "claim_rate_label": hub["claim_rate_label"],
+        },
+        "people_fed": hub["people_fed"],
+        "donations_count": hub["donations_count"],
+        "claim_rate_pct": hub["claim_rate_pct"],
+        "claim_rate_display": hub["claim_rate_display"],
+        "rating": hub["rating"],
+        "rating_display": hub["rating_display"],
+        "review_count": hub["review_count"],
+        "reviews_available": hub["reviews_available"],
+        "reviews_label": hub["reviews_label"],
+    }
+
+    if lat is not None and lng is not None:
+        distance_m = haversine_distance_m(
+            lat,
+            lng,
+            float(restaurant.latitude),
+            float(restaurant.longitude),
+        )
+        data["distance_km"] = round(distance_m / 1000, 1)
+
+    if include_meals:
+        foods = list(
+            FoodItem.objects.filter(
+                restaurant=restaurant,
+                list_status=ListStatus.ACTIVE,
+                quantity_available__gt=0,
+                pickup_end__gt=now_sgt(),
+            )
+            .exclude(status=FoodStatus.EXPIRED)
+            .order_by("pickup_start", "name")
+        )
+        data["available_meals"] = [_serialize_available_meal(food) for food in foods]
+        data["active_meal_count"] = len(foods)
+        data["available_now_label"] = (
+            f"{len(foods)} item{'s' if len(foods) != 1 else ''}" if foods else "0 items"
+        )
+
+    return data
 
 
 def _serialize_restaurant_profile(
@@ -983,6 +1152,7 @@ def _serialize_restaurant_profile(
         "name": restaurant.name,
         "address": restaurant.address,
         "postal_code": restaurant.postal_code,
+        "area_label": derive_area_label(restaurant.address),
         "latitude": float(restaurant.latitude),
         "longitude": float(restaurant.longitude),
         "cuisine": restaurant.cuisine,
@@ -998,6 +1168,7 @@ def _serialize_restaurant_profile(
         "initials": _initials(restaurant.name),
     }
     if not public:
+        hub = _profile_hub_stats(restaurant)
         data.update(
             {
                 "uen": restaurant.uen,
@@ -1006,6 +1177,15 @@ def _serialize_restaurant_profile(
                 "contact_email": restaurant.contact_email,
                 "contact_phone": restaurant.contact_phone,
                 "is_approved": restaurant.is_approved,
+                "member_since": restaurant.created_at.astimezone(SGT).strftime("%b %Y"),
+                "hub": hub,
+                "people_fed": hub["people_fed"],
+                "donations_count": hub["donations_count"],
+                "claim_rate_pct": hub["claim_rate_pct"],
+                "claim_rate_display": hub["claim_rate_display"],
+                "rating": hub["rating"],
+                "rating_display": hub["rating_display"],
+                "review_count": hub["review_count"],
             }
         )
     return data

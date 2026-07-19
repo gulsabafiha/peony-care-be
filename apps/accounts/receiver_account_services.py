@@ -61,6 +61,7 @@ def build_receiver_data_export(user: User) -> dict:
             "alert_sponsored": settings_obj.alert_sponsored,
             "alert_all_claimed": settings_obj.alert_all_claimed,
             "alert_window_expiring": settings_obj.alert_window_expiring,
+            "alert_no_show": settings_obj.alert_no_show,
             "alert_donation_claimed": settings_obj.alert_donation_claimed,
             "alert_receipts": settings_obj.alert_receipts,
         }

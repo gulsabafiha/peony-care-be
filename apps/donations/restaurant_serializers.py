@@ -175,10 +175,26 @@ class DashboardSerializer(serializers.Serializer):
     today_listings = RestaurantDonationSerializer(many=True)
 
 
+class RestaurantProfileHubSerializer(serializers.Serializer):
+    people_fed = serializers.IntegerField()
+    people_fed_label = serializers.CharField()
+    donations_count = serializers.IntegerField(required=False)
+    donations_label = serializers.CharField(required=False)
+    claim_rate_pct = serializers.IntegerField(allow_null=True)
+    claim_rate_display = serializers.CharField()
+    claim_rate_label = serializers.CharField()
+    rating = serializers.FloatField(allow_null=True)
+    rating_display = serializers.CharField()
+    review_count = serializers.IntegerField()
+    reviews_label = serializers.CharField()
+    reviews_available = serializers.BooleanField()
+
+
 class RestaurantProfileSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     name = serializers.CharField()
     address = serializers.CharField()
+    area_label = serializers.CharField(allow_null=True, required=False)
     cuisine = serializers.CharField(required=False, allow_blank=True)
     opening_hours = serializers.CharField(required=False, allow_blank=True)
     opens_at = serializers.TimeField(allow_null=True, required=False)
@@ -186,10 +202,24 @@ class RestaurantProfileSerializer(serializers.Serializer):
     open_days = serializers.ListField(child=serializers.IntegerField(), required=False)
     is_approved = serializers.BooleanField(required=False)
     is_verified = serializers.BooleanField(required=False)
+    verified_label = serializers.CharField(allow_null=True, required=False)
     initials = serializers.CharField(required=False)
     uen = serializers.CharField(required=False)
     uen_verified = serializers.BooleanField(required=False)
     photo_url = serializers.CharField(allow_null=True, required=False)
+    member_since = serializers.CharField(required=False)
+    hub = RestaurantProfileHubSerializer(required=False)
+    people_fed = serializers.IntegerField(required=False)
+    donations_count = serializers.IntegerField(required=False)
+    claim_rate_pct = serializers.IntegerField(allow_null=True, required=False)
+    claim_rate_display = serializers.CharField(required=False)
+    rating = serializers.FloatField(allow_null=True, required=False)
+    rating_display = serializers.CharField(required=False)
+    review_count = serializers.IntegerField(required=False)
+    impact = serializers.DictField(required=False)
+    available_meals = serializers.ListField(required=False)
+    active_meal_count = serializers.IntegerField(required=False)
+    contact_phone = serializers.CharField(required=False, allow_blank=True)
 
 
 class RestaurantProfileUpdateSerializer(serializers.Serializer):

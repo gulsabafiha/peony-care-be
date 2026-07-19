@@ -8,6 +8,9 @@ from apps.accounts.models import (
     ReceiverLocationHistory,
     ReceiverProfile,
     RefreshToken,
+    RestaurantDataExport,
+    RestaurantLegalRetention,
+    RestaurantPayoutRetention,
     RestaurantProfile,
     User,
 )
@@ -99,6 +102,57 @@ class ReceiverDataExportAdmin(admin.ModelAdmin):
     readonly_fields = ("id", "requested_at")
     autocomplete_fields = ("user",)
     ordering = ("-requested_at",)
+
+
+@admin.register(RestaurantDataExport)
+class RestaurantDataExportAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "phone_e164",
+        "email",
+        "status",
+        "email_sent",
+        "requested_at",
+        "completed_at",
+    )
+    list_filter = ("status", "email_sent")
+    search_fields = ("phone_e164", "email", "user__phone_e164")
+    readonly_fields = ("id", "requested_at", "completed_at")
+    autocomplete_fields = ("user",)
+    ordering = ("-requested_at",)
+
+
+@admin.register(RestaurantLegalRetention)
+class RestaurantLegalRetentionAdmin(admin.ModelAdmin):
+    list_display = (
+        "uen",
+        "business_name",
+        "contact_email",
+        "deleted_at",
+        "purge_after",
+        "purged_at",
+    )
+    list_filter = ("purged_at",)
+    search_fields = ("uen", "business_name", "contact_email", "phone_e164")
+    readonly_fields = ("id", "deleted_at")
+    ordering = ("-deleted_at",)
+
+
+@admin.register(RestaurantPayoutRetention)
+class RestaurantPayoutRetentionAdmin(admin.ModelAdmin):
+    list_display = (
+        "former_meal_order_id",
+        "restaurant_uen",
+        "total_amount_sgd",
+        "status",
+        "ordered_at",
+        "retained_until",
+    )
+    search_fields = ("restaurant_uen", "restaurant_name", "donor_label")
+    readonly_fields = ("id", "created_at")
+    autocomplete_fields = ("legal_retention",)
+    ordering = ("-ordered_at",)
 
 
 @admin.register(RestaurantProfile)

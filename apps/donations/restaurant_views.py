@@ -250,7 +250,10 @@ class PublicRestaurantView(GenericAPIView):
         responses={200: enveloped_schema(RestaurantProfileSerializer, "PublicRestaurantEnvelope")},
     )
     def get(self, request, restaurant_id):
-        data = restaurant_services.get_public_restaurant(str(restaurant_id))
+        data = restaurant_services.get_public_restaurant(
+            str(restaurant_id),
+            request=request,
+        )
         return success_response(data)
 
 

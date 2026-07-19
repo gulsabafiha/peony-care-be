@@ -554,8 +554,14 @@ class TestRestaurantProfile:
 
         profile = client.get(reverse("restaurant_donations:restaurant-profile"))
         assert profile.status_code == 200
-        assert profile.json()["data"]["name"] == "Tian Tian Hainanese"
-        assert profile.json()["data"]["initials"] == "TT"
+        data = profile.json()["data"]
+        assert data["name"] == "Tian Tian Hainanese"
+        assert data["initials"] == "TT"
+        assert data["people_fed"] == 0
+        assert data["claim_rate_display"] == "—"
+        assert data["rating"] is None
+        assert data["hub"]["reviews_available"] is False
+        assert "member_since" in data
 
         status = client.get(reverse("restaurant_donations:restaurant-approval-status"))
         assert status.status_code == 200
@@ -607,8 +613,119 @@ class TestRestaurantProfile:
 
     def test_public_restaurant_page(self, api_client, restaurant_user):
         restaurant = restaurant_user.restaurant_profile
+        restaurant.about = "Family-run since 1987"
+        restaurant.is_verified = True
+        restaurant.save(update_fields=["about", "is_verified"])
         response = api_client.get(
             reverse("public-restaurant", kwargs={"restaurant_id": restaurant.id})
         )
         assert response.status_code == 200
-        assert response.json()["data"]["name"] == "Tian Tian Hainanese"
+        data = response.json()["data"]
+        assert data["name"] == "Tian Tian Hainanese"
+        assert data["area_label"] == "Joo Chiat"
+        assert data["about"] == "Family-run since 1987"
+        assert data["verified_label"] == "Verified partner"
+        assert "impact" in data
+        assert data["impact"]["people_fed"] == 0
+        assert data["impact"]["donations_count"] == 0
+        assert "available_meals" in data
+
+
+class TestRestaurantNotificationSettings:
+    def test_get_and_patch_settings(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        url = reverse("restaurant_accounts:restaurant-notification-settings")
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["push_enabled"] is True
+        assert data["alert_new_claim"] is True
+        assert data["alert_no_show"] is True
+        assert data["email_enabled"] is False
+
+        response = client.patch(
+            url,
+            {
+                "push_enabled": False,
+                "alert_no_show": False,
+                "email_enabled": True,
+            },
+            format="json",
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["push_enabled"] is False
+        assert data["alert_no_show"] is False
+        assert data["email_enabled"] is True
+        assert data["alert_new_claim"] is True
+
+
+class TestRestaurantAccount:
+    def test_data_export_download(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        response = client.get(
+            reverse("restaurant_accounts:restaurant-data-export-download")
+        )
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"
+        assert response.content[:4] == b"%PDF"
+
+    def test_request_data_export(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        response = client.post(
+            reverse("restaurant_accounts:restaurant-data-export")
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["format"] == "pdf"
+        assert data["status"] == "COMPLETED"
+        assert data["delivery"] == "email"
+        assert data["eta_hours"] == 48
+        assert data["email"] == "contact@restaurant.sg"
+        assert data["email_sent"] is True
+        assert "download_url" in data
+        assert "Sponsored-order" in " ".join(data["includes"])
+
+    def test_delete_account(self, api_client, restaurant_user):
+        from apps.accounts.models import RestaurantLegalRetention, User
+        from apps.common.choices import ListStatus
+        from apps.donations.models import FoodItem
+
+        now = timezone.now()
+        FoodItem.objects.create(
+            restaurant=restaurant_user.restaurant_profile,
+            name="Chicken Rice",
+            category="RICE",
+            quantity_original=5,
+            quantity_available=5,
+            pickup_start=now,
+            pickup_end=now + timedelta(hours=2),
+            list_status=ListStatus.ACTIVE,
+        )
+
+        client = auth_client(api_client, restaurant_user)
+        user_id = restaurant_user.id
+        uen = restaurant_user.restaurant_profile.uen
+        response = client.post(
+            reverse("restaurant_accounts:restaurant-account-delete"),
+            {"confirmation": "DELETE"},
+            format="json",
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["deleted"] is True
+        assert data["active_donations_deactivated"] == 1
+        assert data["retention"]["uen_contact_days"] == 90
+        assert data["retention"]["payout_years"] == 7
+        assert not User.objects.filter(id=user_id).exists()
+        assert RestaurantLegalRetention.objects.filter(uen=uen).exists()
+
+    def test_delete_account_requires_confirmation(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        response = client.post(
+            reverse("restaurant_accounts:restaurant-account-delete"),
+            {"confirmation": "please"},
+            format="json",
+        )
+        assert response.status_code == 400

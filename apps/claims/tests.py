@@ -208,13 +208,20 @@ class TestBrowseAndSearch:
         data = response.json()["data"]
         assert data["name"] == "Tian Tian Hainanese"
         assert data["distance_km"] == 0.0
+        assert data["area_label"] == "Joo Chiat"
         assert data["active_meal_count"] == 1
+        assert data["available_now_label"] == "1 item"
         assert data["categories"] == ["Rice"]
+        assert data["impact"]["donations_count"] == 1
+        assert "people_fed" in data["impact"]
         assert len(data["available_meals"]) == 1
         meal = data["available_meals"][0]
         assert meal["name"] == "Chicken Rice"
+        assert meal["title"] == "Chicken Rice"
         assert meal["quantity_available"] == 5
+        assert meal["quantity_left_label"] == "5 left"
         assert meal["sponsorship_type"] == "DIRECT"
+        assert meal["is_sponsored"] is False
 
     def test_restaurant_detail_not_found(self, api_client, receiver_user):
         client = auth_client(api_client, receiver_user)
