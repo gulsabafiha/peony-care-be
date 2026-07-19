@@ -201,7 +201,10 @@ class RestaurantDataExport(models.Model):
         db_table = "restaurant_data_exports"
         ordering = ["-requested_at"]
         indexes = [
-            models.Index(fields=["user", "requested_at"]),
+            models.Index(
+                fields=["user", "requested_at"],
+                name="restaurant__user_id_e8c1a2_idx",
+            ),
         ]
 
     def __str__(self) -> str:

@@ -11,11 +11,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name="restaurantdataexport",
-            new_name="restaurant__user_id_a1eda7_idx",
-            old_name="restaurant__user_id_e8c1a2_idx",
-        ),
         migrations.AddField(
             model_name="restaurantdataexport",
             name="email",
