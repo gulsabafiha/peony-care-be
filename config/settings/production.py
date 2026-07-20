@@ -48,7 +48,10 @@ AWS_S3_CUSTOM_DOMAIN = config(  # noqa: F405
 )
 AWS_DEFAULT_ACL = None
 AWS_QUERYSTRING_AUTH = False
-AWS_S3_FILE_OVERWRITE = False
+# Filenames already include a UUID (see apps.common.uploads), so skip the
+# pre-upload HeadObject "exists" check. That call often 403s when IAM only
+# grants PutObject, which surfaces as a 500 on menu/food/profile uploads.
+AWS_S3_FILE_OVERWRITE = True
 AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
 AWS_S3_SIGNATURE_VERSION = "s3v4"
 
@@ -56,6 +59,16 @@ MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
 STORAGES = {
     **STORAGES,  # noqa: F405
     "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": AWS_STORAGE_BUCKET_NAME,  # noqa: F405
+            "region_name": AWS_S3_REGION_NAME,  # noqa: F405
+            "default_acl": None,
+            "querystring_auth": False,
+            "file_overwrite": True,
+            "object_parameters": {"CacheControl": "max-age=86400"},
+            "signature_version": "s3v4",
+            "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+        },
     },
 }
