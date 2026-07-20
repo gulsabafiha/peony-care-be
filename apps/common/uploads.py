@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from urllib.parse import unquote, urlparse
 
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -54,9 +55,22 @@ def save_menu_photo(restaurant_id: str, uploaded_file) -> str:
 
 
 def delete_stored_photo(photo_url: str) -> None:
-    if not photo_url or not photo_url.startswith(settings.MEDIA_URL):
+    if not photo_url:
         return
 
-    relative_path = photo_url.removeprefix(settings.MEDIA_URL)
-    if default_storage.exists(relative_path):
+    media_url = settings.MEDIA_URL
+    if photo_url.startswith(media_url):
+        relative_path = photo_url.removeprefix(media_url).split("?", 1)[0]
+    else:
+        # Support absolute S3 URLs when MEDIA_URL is local (or vice versa).
+        path = unquote(urlparse(photo_url).path.lstrip("/"))
+        bucket = getattr(settings, "AWS_STORAGE_BUCKET_NAME", "") or ""
+        if bucket and path.startswith(f"{bucket}/"):
+            path = path[len(bucket) + 1 :]
+        known_prefixes = ("receivers/", "restaurants/", "foods/", "menu-photos/")
+        if not path.startswith(known_prefixes):
+            return
+        relative_path = path
+
+    if relative_path and default_storage.exists(relative_path):
         default_storage.delete(relative_path)

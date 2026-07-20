@@ -1,3 +1,5 @@
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F403
 
 DEBUG = False
@@ -26,3 +28,34 @@ if SECURE_SSL_REDIRECT:
     SECURE_HSTS_PRELOAD = True
 else:
     SECURE_HSTS_SECONDS = 0
+
+# Media uploads (menu / food / profile photos) go to S3 in production only.
+if not AWS_STORAGE_BUCKET_NAME:  # noqa: F405
+    raise ImproperlyConfigured(
+        "AWS_STORAGE_BUCKET_NAME is required when using production settings."
+    )
+if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:  # noqa: F405
+    raise ImproperlyConfigured(
+        "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required when using "
+        "production settings."
+    )
+
+INSTALLED_APPS = [*INSTALLED_APPS, "storages"]  # noqa: F405
+
+AWS_S3_CUSTOM_DOMAIN = config(  # noqa: F405
+    "AWS_S3_CUSTOM_DOMAIN",
+    default=f"{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com",  # noqa: F405
+)
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = False
+AWS_S3_FILE_OVERWRITE = False
+AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+AWS_S3_SIGNATURE_VERSION = "s3v4"
+
+MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
+STORAGES = {
+    **STORAGES,  # noqa: F405
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    },
+}
