@@ -7,7 +7,7 @@ from django.conf import settings
 from django.db import transaction
 
 from apps.accounts.models import User
-from apps.claims.models import FoodClaim
+from apps.claims.models import FoodClaim, RestaurantReview
 from apps.common.choices import (
     COUNTED_CLAIM_STATUSES,
     DAILY_LIMIT_CLAIM_STATUSES,
@@ -269,17 +269,27 @@ def list_claim_history(receiver: User) -> dict:
         .order_by("-claimed_at")
     )
 
+    reviewed_restaurant_ids = set(
+        RestaurantReview.objects.filter(receiver=receiver).values_list(
+            "restaurant_id", flat=True
+        )
+    )
+
     items = []
     grouped: dict[str, list] = defaultdict(list)
 
     for claim in claims:
+        has_review = claim.restaurant_id in reviewed_restaurant_ids
         item = {
             "id": str(claim.id),
             "food_name": claim.food.name,
+            "restaurant_id": str(claim.restaurant_id),
             "restaurant_name": claim.restaurant.name,
             "status": claim.status,
             "claimed_at": claim.claimed_at.isoformat(),
             "pickup_window": format_pickup_window(claim.food.pickup_start, claim.food.pickup_end),
+            "has_review": has_review,
+            "can_review": claim.status == ClaimStatus.COLLECTED,
         }
         items.append(item)
 

@@ -16,6 +16,7 @@ from apps.accounts.models import (
     User,
 )
 from apps.claims.models import ClaimReportReasonOption, FoodClaim
+from apps.claims.review_services import ensure_review_tags
 from apps.common.choices import (
     ClaimStatus,
     CreditPreference,
@@ -262,6 +263,7 @@ class Command(BaseCommand):
                 code=code,
                 defaults={"label": label, "sort_order": sort_order, "is_active": True},
             )
+        ensure_review_tags()
 
     def _get_or_create_admin(self, password: str) -> User:
         user, created = User.objects.get_or_create(

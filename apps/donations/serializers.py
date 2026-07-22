@@ -55,6 +55,9 @@ class RestaurantBrowseItemSerializer(serializers.Serializer):
     longitude = serializers.FloatField()
     photo_url = serializers.CharField(allow_null=True)
     is_verified = serializers.BooleanField()
+    opening_hours = serializers.CharField(allow_blank=True)
+    opens_at = serializers.TimeField(allow_null=True)
+    closes_at = serializers.TimeField(allow_null=True)
     distance_km = serializers.FloatField()
     active_meal_count = serializers.IntegerField()
 

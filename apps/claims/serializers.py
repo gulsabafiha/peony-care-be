@@ -32,11 +32,13 @@ class ClaimResponseSerializer(serializers.Serializer):
 class ClaimHistoryItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     food_name = serializers.CharField()
+    restaurant_id = serializers.UUIDField(required=False)
     restaurant_name = serializers.CharField(required=False)
     status = serializers.CharField()
     claimed_at = serializers.DateTimeField()
     pickup_window = serializers.CharField()
-
+    has_review = serializers.BooleanField(required=False)
+    can_review = serializers.BooleanField(required=False)
 
 class RestaurantClaimSerializer(serializers.Serializer):
     id = serializers.UUIDField()
@@ -128,4 +130,79 @@ class ClaimReportSerializer(serializers.Serializer):
     reason_label = serializers.CharField()
     comment = serializers.CharField(allow_blank=True)
     created_at = serializers.DateTimeField()
+    message = serializers.CharField()
+
+
+class ReviewTagSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    code = serializers.CharField()
+    label = serializers.CharField()
+
+
+class RestaurantReviewSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    restaurant_id = serializers.UUIDField()
+    rating = serializers.IntegerField()
+    rating_label = serializers.CharField(allow_null=True)
+    tag_codes = serializers.ListField(child=serializers.CharField())
+    tags = ReviewTagSerializer(many=True)
+    comment = serializers.CharField(allow_blank=True)
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    message = serializers.CharField(required=False)
+    success_message = serializers.CharField(required=False)
+
+
+class RestaurantReviewFormSerializer(serializers.Serializer):
+    restaurant_id = serializers.UUIDField()
+    restaurant_name = serializers.CharField()
+    latest_food_name = serializers.CharField(required=False)
+    collected_at = serializers.DateTimeField(allow_null=True)
+    collected_label = serializers.CharField()
+    context_subtitle = serializers.CharField()
+    can_review = serializers.BooleanField()
+    has_review = serializers.BooleanField()
+    tags = ReviewTagSerializer(many=True)
+    review = RestaurantReviewSerializer(allow_null=True)
+
+
+class CreateRestaurantReviewSerializer(serializers.Serializer):
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    comment = serializers.CharField(required=False, allow_blank=True, default="")
+    tag_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+    )
+    tag_codes = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+    )
+
+
+class UpdateRestaurantReviewSerializer(serializers.Serializer):
+    rating = serializers.IntegerField(min_value=1, max_value=5, required=False)
+    comment = serializers.CharField(required=False, allow_blank=True)
+    tag_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+    )
+    tag_codes = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate(self, data):
+        if not data:
+            raise serializers.ValidationError("Provide at least one field to update.")
+        return data
+
+
+class DeleteRestaurantReviewSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    restaurant_id = serializers.UUIDField()
+    deleted = serializers.BooleanField()
     message = serializers.CharField()

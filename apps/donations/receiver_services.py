@@ -123,6 +123,8 @@ def _serialize_restaurant_browse(
     receiver_lat: float,
     receiver_lng: float,
 ) -> dict:
+    from apps.donations.restaurant_services import _hours_display
+
     distance_m = haversine_distance_m(
         receiver_lat,
         receiver_lng,
@@ -138,6 +140,9 @@ def _serialize_restaurant_browse(
         "longitude": float(restaurant.longitude),
         "photo_url": restaurant.photo_url or None,
         "is_verified": restaurant.is_verified,
+        "opening_hours": _hours_display(restaurant),
+        "opens_at": restaurant.opens_at.isoformat() if restaurant.opens_at else None,
+        "closes_at": restaurant.closes_at.isoformat() if restaurant.closes_at else None,
         "distance_km": round(distance_m / 1000, 1),
         "active_meal_count": restaurant.active_meal_count,
     }

@@ -58,7 +58,7 @@ AWS_S3_SIGNATURE_VERSION = "s3v4"
 MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
 STORAGES = {
     **STORAGES,  # noqa: F405
-    "default": {
+    "default": { 
         "BACKEND": "storages.backends.s3.S3Storage",
         "OPTIONS": {
             "bucket_name": AWS_STORAGE_BUCKET_NAME,  # noqa: F405

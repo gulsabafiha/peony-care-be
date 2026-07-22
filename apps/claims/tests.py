@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import time, timedelta
 
 import pytest
 from django.urls import reverse
@@ -185,7 +185,12 @@ class TestBrowseAndSearch:
         assert "Chicken Rice" in names
         assert "Far Meal" not in names
 
-    def test_browse_restaurants(self, api_client, receiver_user, food_item):
+    def test_browse_restaurants(self, api_client, receiver_user, food_item, restaurant_profile):
+        restaurant_profile.opening_hours = "10:00–21:00 · Mon, Tue, Wed, Thu, Fri, Sat, Sun"
+        restaurant_profile.opens_at = time(10, 0)
+        restaurant_profile.closes_at = time(21, 0)
+        restaurant_profile.save(update_fields=["opening_hours", "opens_at", "closes_at"])
+
         client = auth_client(api_client, receiver_user)
         response = client.get(reverse("receiver_donations:receiver-restaurants-browse"))
         assert response.status_code == 200
@@ -194,6 +199,9 @@ class TestBrowseAndSearch:
         assert data[0]["name"] == "Tian Tian Hainanese"
         assert data[0]["active_meal_count"] == 1
         assert data[0]["distance_km"] == 0.0
+        assert data[0]["opening_hours"] == "10:00–21:00 · Mon, Tue, Wed, Thu, Fri, Sat, Sun"
+        assert data[0]["opens_at"] == "10:00:00"
+        assert data[0]["closes_at"] == "21:00:00"
 
     def test_restaurant_detail(self, api_client, receiver_user, restaurant_profile, food_item):
         client = auth_client(api_client, receiver_user)

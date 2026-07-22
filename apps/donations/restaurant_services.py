@@ -980,6 +980,8 @@ def _absolute_photo_url(request, photo_url: str | None) -> str | None:
 
 def _profile_hub_stats(restaurant: RestaurantProfile) -> dict:
     """Lifetime impact stats for profile hub + public details screens."""
+    from apps.claims.review_services import restaurant_rating_stats
+
     people_fed = (
         FoodClaim.objects.filter(
             restaurant=restaurant,
@@ -995,6 +997,7 @@ def _profile_hub_stats(restaurant: RestaurantProfile) -> dict:
         or 0
     )
     claim_rate_pct = round((people_fed / total_original) * 100) if total_original else None
+    rating_stats = restaurant_rating_stats(restaurant.id)
     return {
         "people_fed": people_fed,
         "people_fed_label": "fed",
@@ -1003,12 +1006,7 @@ def _profile_hub_stats(restaurant: RestaurantProfile) -> dict:
         "claim_rate_pct": claim_rate_pct,
         "claim_rate_display": "—" if claim_rate_pct is None else f"{claim_rate_pct}%",
         "claim_rate_label": "claim rate",
-        # Reviews/ratings are not modeled yet — expose null so the UI can hide or stub.
-        "rating": None,
-        "rating_display": "—",
-        "review_count": 0,
-        "reviews_label": "reviews coming soon",
-        "reviews_available": False,
+        **rating_stats,
     }
 
 
