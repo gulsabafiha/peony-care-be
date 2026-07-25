@@ -209,7 +209,7 @@ def _get_restaurant_claim_for_update(user: User, claim_id: str) -> FoodClaim:
     restaurant = get_restaurant_profile(user)
     try:
         return (
-            FoodClaim.objects.select_for_update()
+            FoodClaim.objects.select_for_update(of=("self",))
             .select_related("receiver__receiver_profile", "food")
             .get(id=claim_id, restaurant=restaurant)
         )
