@@ -215,7 +215,7 @@ def _get_restaurant_claim_for_update(user: User, claim_id: str) -> FoodClaim:
         )
     except FoodClaim.DoesNotExist as exc:
         raise PeonyAPIException(
-            code="CLAIM_NOT_FOUND",
+            code="CLAIM_NOT_FOUND",                
             message="Claim not found.",
             http_status=404,
         ) from exc

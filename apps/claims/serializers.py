@@ -142,6 +142,7 @@ class ReviewTagSerializer(serializers.Serializer):
 class RestaurantReviewSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     restaurant_id = serializers.UUIDField()
+    reviewer_name = serializers.CharField(allow_blank=True)
     rating = serializers.IntegerField()
     rating_label = serializers.CharField(allow_null=True)
     tag_codes = serializers.ListField(child=serializers.CharField())

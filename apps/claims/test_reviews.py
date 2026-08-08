@@ -167,6 +167,7 @@ class TestRestaurantReviews:
         assert created["rating"] == 4
         assert created["rating_label"] == "Very good"
         assert created["restaurant_id"] == str(restaurant_profile.id)
+        assert created["reviewer_name"] == "Reviewer"
         assert set(created["tag_codes"]) == {"friendly-staff", "fresh-tasty"}
         assert "claim_id" not in created
         assert (
@@ -181,6 +182,7 @@ class TestRestaurantReviews:
         form_data = form.json()["data"]
         assert form_data["has_review"] is True
         assert form_data["review"]["rating"] == 4
+        assert form_data["review"]["reviewer_name"] == "Reviewer"
 
         duplicate = client.post(
             url,
@@ -202,6 +204,7 @@ class TestRestaurantReviews:
         updated = update.json()["data"]
         assert updated["rating"] == 5
         assert updated["rating_label"] == "Excellent"
+        assert updated["reviewer_name"] == "Reviewer"
         assert updated["tag_codes"] == ["quick-pickup"]
         assert updated["comment"] == "Updated note"
 

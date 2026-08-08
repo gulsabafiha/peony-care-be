@@ -78,6 +78,7 @@ class RestaurantReviewAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "restaurant",
+        "reviewer_name",
         "receiver",
         "rating",
         "created_at",
@@ -85,9 +86,15 @@ class RestaurantReviewAdmin(admin.ModelAdmin):
     list_filter = ("rating", "created_at")
     search_fields = (
         "restaurant__name",
+        "receiver__receiver_profile__display_name",
         "receiver__phone_e164",
         "comment",
     )
+
+    @admin.display(description="Reviewer")
+    def reviewer_name(self, obj):
+        profile = getattr(obj.receiver, "receiver_profile", None)
+        return profile.display_name if profile else ""
     readonly_fields = ("id", "created_at", "updated_at")
     autocomplete_fields = ("receiver", "restaurant")
     filter_horizontal = ("tags",)

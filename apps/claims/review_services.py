@@ -85,11 +85,19 @@ def _serialize_tag(option: ReviewTagOption) -> dict:
     return {"id": str(option.id), "code": option.code, "label": option.label}
 
 
+def _reviewer_name(review: RestaurantReview) -> str:
+    profile = getattr(review.receiver, "receiver_profile", None)
+    if profile and profile.display_name:
+        return profile.display_name
+    return ""
+
+
 def _serialize_review(review: RestaurantReview) -> dict:
     tags = list(review.tags.all())
     return {
         "id": str(review.id),
         "restaurant_id": str(review.restaurant_id),
+        "reviewer_name": _reviewer_name(review),
         "rating": review.rating,
         "rating_label": rating_label(review.rating),
         "tag_codes": [tag.code for tag in tags],
@@ -98,6 +106,14 @@ def _serialize_review(review: RestaurantReview) -> dict:
         "created_at": review.created_at.isoformat(),
         "updated_at": review.updated_at.isoformat(),
     }
+
+
+def _load_review(review_id) -> RestaurantReview:
+    return (
+        RestaurantReview.objects.select_related("receiver__receiver_profile")
+        .prefetch_related("tags")
+        .get(id=review_id)
+    )
 
 
 def _get_restaurant(restaurant_id: str) -> RestaurantProfile:
@@ -137,7 +153,8 @@ def _require_can_review(receiver: User, restaurant: RestaurantProfile) -> FoodCl
 
 def _get_review(receiver: User, restaurant: RestaurantProfile) -> RestaurantReview | None:
     return (
-        RestaurantReview.objects.prefetch_related("tags")
+        RestaurantReview.objects.select_related("receiver__receiver_profile")
+        .prefetch_related("tags")
         .filter(receiver=receiver, restaurant=restaurant)
         .first()
     )
@@ -227,7 +244,7 @@ def create_review(
     if tags:
         review.tags.set(tags)
 
-    review = RestaurantReview.objects.prefetch_related("tags").get(id=review.id)
+    review = _load_review(review.id)
     data = _serialize_review(review)
     data["message"] = "Review submitted. Thank you!"
     data["success_message"] = "Review submitted"
@@ -267,7 +284,7 @@ def update_review(
         tags = _resolve_tags(tag_ids=tag_ids, tag_codes=tag_codes)
         review.tags.set(tags)
 
-    review = RestaurantReview.objects.prefetch_related("tags").get(id=review.id)
+    review = _load_review(review.id)
     data = _serialize_review(review)
     data["message"] = "Review updated."
     data["success_message"] = "Review updated"
