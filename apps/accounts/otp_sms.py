@@ -109,53 +109,66 @@ def _send_via_twilio_verify(phone_e164: str, purpose: str, code: str) -> None:
             http_status=503,
         )
 
+    account_sid = (getattr(settings, "TWILIO_ACCOUNT_SID", "") or "").strip()
+    print(
+        f"[Peony OTP] Twilio account_sid_prefix={account_sid[:10]}… "
+        f"verify_sid_prefix={service_sid[:10]}…",
+        flush=True,
+    )
+
     code_length = int(getattr(settings, "TWILIO_VERIFY_CODE_LENGTH", 4) or 4)
     if code_length < 4 or code_length > 10:
         code_length = 4
 
-    # Pad/truncate so we always send exactly code_length digits.
     custom_code = "".join(ch for ch in str(code) if ch.isdigit())
     if len(custom_code) < code_length:
         custom_code = custom_code.zfill(code_length)
     custom_code = custom_code[-code_length:]
 
+    # Prefer our 4-digit custom_code; if Twilio rejects it, fall back to Twilio-generated code.
     try:
-        # Align service setting (does not always apply to in-flight SMS alone).
-        service = client.verify.v2.services(service_sid).update(code_length=code_length)
-        actual_length = getattr(service, "code_length", None)
-        print(
-            f"[Peony OTP] Twilio Verify service code_length={actual_length}",
-            flush=True,
-        )
-
-        # Force the SMS body to use our 4-digit code (requires Custom Code enabled).
-        # Twilio Console → Verify → Services → your service → General →
-        # "Enable Custom Verification Code".
         verification = client.verify.v2.services(service_sid).verifications.create(
             to=phone_e164,
             channel="sms",
             custom_code=custom_code,
         )
-    except Exception as exc:
-        logger.exception("Twilio Verify send failed for %s", phone_e164)
-        message = str(exc)
-        if "custom" in message.lower() or getattr(exc, "status", None) == 403:
+    except Exception as custom_exc:
+        status = getattr(custom_exc, "status", None)
+        twilio_msg = _twilio_error_message(custom_exc)
+        # Auth failures must not be reported as "custom code disabled".
+        if status == 401 or "20003" in twilio_msg or "does not exist" in twilio_msg.lower():
+            logger.exception("Twilio auth failed for %s", phone_e164)
             raise PeonyAPIException(
                 code="OTP_PROVIDER_UNAVAILABLE",
                 message=(
-                    "Twilio Custom Verification Code is not enabled. "
-                    "In Twilio Console open Verify → Services → your service → "
-                    "General → enable Custom Verification Code, then retry."
+                    "Twilio authentication failed. "
+                    "On the server .env, paste TWILIO_ACCOUNT_SID and "
+                    "TWILIO_AUTH_TOKEN exactly from Twilio Console (same account), "
+                    "then restart containers."
                 ),
-                details={"provider": "twilio"},
+                details={"provider": "twilio", "twilio_error": twilio_msg[:300]},
                 http_status=503,
+            ) from custom_exc
+
+        logger.warning(
+            "Twilio custom_code send failed for %s (%s); retrying without custom_code",
+            phone_e164,
+            custom_exc,
+        )
+        try:
+            verification = client.verify.v2.services(service_sid).verifications.create(
+                to=phone_e164,
+                channel="sms",
+            )
+        except Exception as exc:
+            logger.exception("Twilio Verify send failed for %s", phone_e164)
+            twilio_msg = _twilio_error_message(exc)
+            raise PeonyAPIException(
+                code="OTP_DELIVERY_FAILED",
+                message=_friendly_twilio_send_message(twilio_msg),
+                details={"provider": "twilio", "twilio_error": twilio_msg[:300]},
+                http_status=502,
             ) from exc
-        raise PeonyAPIException(
-            code="OTP_DELIVERY_FAILED",
-            message="Unable to send OTP SMS. Please try again shortly.",
-            details={"provider": "twilio"},
-            http_status=502,
-        ) from exc
 
     sid = getattr(verification, "sid", "") or ""
     status = getattr(verification, "status", "") or ""
@@ -172,6 +185,31 @@ def _send_via_twilio_verify(phone_e164: str, purpose: str, code: str) -> None:
         status,
         code_length,
     )
+
+
+def _twilio_error_message(exc: Exception) -> str:
+    msg = getattr(exc, "msg", None) or getattr(exc, "message", None) or str(exc)
+    return str(msg).strip()
+
+
+def _friendly_twilio_send_message(twilio_msg: str) -> str:
+    lower = twilio_msg.lower()
+    if "unverified" in lower or "trial" in lower:
+        return (
+            "Twilio trial can only SMS verified numbers. "
+            "Add this phone under Twilio → Phone Numbers → Verified Caller IDs, "
+            "or upgrade the account."
+        )
+    if "authenticate" in lower or "credential" in lower or "20003" in lower:
+        return "Twilio authentication failed. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN."
+    if "service" in lower and ("not found" in lower or "20404" in lower):
+        return "Twilio Verify Service SID is invalid. Check TWILIO_VERIFY_SERVICE_SID."
+    if "permission" in lower or "403" in lower:
+        return (
+            "Twilio denied the SMS send. Check Verify geo permissions "
+            "(Allow SMS to Bangladesh/Singapore) and account status."
+        )
+    return "Unable to send OTP SMS. Please try again shortly."
 
 
 def _send_via_sns(phone_e164: str, purpose: str, code: str) -> None:
