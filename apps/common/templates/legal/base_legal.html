@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title }} · UDUFood</title>
+  <style>
+    :root {
+      --ink: #1a1a2e;
+      --muted: #5c5c6e;
+      --bg: #faf9f7;
+      --card: #ffffff;
+      --accent: #d31b1b;
+      --line: #e8e4de;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+    header {
+      padding: 2rem 1.25rem 1rem;
+      max-width: 44rem;
+      margin: 0 auto;
+    }
+    header .brand {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    h1 {
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      margin: 0.75rem 0 0.35rem;
+      line-height: 1.2;
+      color: var(--accent);
+    }
+    .meta { color: var(--muted); font-size: 0.95rem; margin: 0; }
+    nav.toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1rem 0 0;
+    }
+    nav.toc a {
+      display: inline-block;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      background: #eee;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    nav.toc a:hover { background: #e0e0e0; }
+    main {
+      max-width: 44rem;
+      margin: 0 auto 3rem;
+      padding: 1.5rem 1.25rem 2.5rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    h2 {
+      font-size: 1.35rem;
+      margin: 2rem 0 0.75rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--line);
+      scroll-margin-top: 1rem;
+    }
+    h2:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+    h3 { font-size: 1.05rem; margin: 1.35rem 0 0.4rem; }
+    p, li { color: #2a2a38; }
+    ul { padding-left: 1.2rem; }
+    a { color: var(--accent); }
+    .note {
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    footer {
+      max-width: 44rem;
+      margin: 0 auto 2.5rem;
+      padding: 0 1.25rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">UDUFood</a>
+    <h1>{{ page_title }}</h1>
+    <p class="meta">Last updated: 1 June 2026 · Operated as Peony Care / UDUFood</p>
+    {% block toc %}{% endblock %}
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    <a href="/privacy">Privacy Policy</a> ·
+    <a href="/terms">Terms of Use</a><br>
+    Questions about your data?
+    Email <a href="mailto:privacy@udufood.sg">privacy@udufood.sg</a>
+  </footer>
+</body>
+</html>

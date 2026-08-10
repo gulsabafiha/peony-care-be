@@ -5,12 +5,17 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 import config.admin  # noqa: F401
 
+from apps.common.legal_views import privacy_policy, terms_of_service
 from apps.common.views import health_check
 from apps.donations.restaurant_views import PublicRestaurantView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health_check, name="health-check"),
+    path("privacy/", privacy_policy, name="privacy-policy"),
+    path("privacy", privacy_policy),
+    path("terms/", terms_of_service, name="terms-of-service"),
+    path("terms", terms_of_service),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/v1/auth/", include("apps.accounts.urls")),

@@ -133,6 +133,12 @@ OTP_SMS_SENDER_ID = config("OTP_SMS_SENDER_ID", default="")
 OTP_EXPIRY_MINUTES = config("OTP_EXPIRY_MINUTES", default=1, cast=int)
 OTP_MAX_ATTEMPTS = config("OTP_MAX_ATTEMPTS", default=5, cast=int)
 OTP_RESEND_COOLDOWN_SECONDS = config("OTP_RESEND_COOLDOWN_SECONDS", default=60, cast=int)
+# Play Store reviewers: comma-separated E.164 phones; fixed OTP; SMS skipped
+PLAY_STORE_REVIEW_PHONES = config(
+    "PLAY_STORE_REVIEW_PHONES",
+    default="+6599990001,+6599990002",
+)
+PLAY_STORE_REVIEW_OTP = config("PLAY_STORE_REVIEW_OTP", default="1234")
 REGISTRATION_TOKEN_MAX_AGE_SECONDS = config(
     "REGISTRATION_TOKEN_MAX_AGE_SECONDS", default=1800, cast=int
 )

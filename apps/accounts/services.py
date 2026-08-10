@@ -18,6 +18,11 @@ from apps.accounts.models import (
     User,
 )
 from apps.accounts.otp_sms import dispatch_otp
+from apps.accounts.play_store_review import (
+    is_play_store_review_otp,
+    is_play_store_review_phone,
+    review_otp_code,
+)
 from apps.common.choices import OtpPurpose, UserRole
 from apps.common.exceptions import PeonyAPIException
 from apps.common.geocoding import extract_postal_code, resolve_restaurant_coordinates
@@ -94,7 +99,8 @@ def send_otp(phone: str, purpose: str) -> dict:
                 http_status=429,
             )
 
-    code = _generate_otp_code()
+    review_phone = is_play_store_review_phone(phone_e164)
+    code = review_otp_code() if review_phone else _generate_otp_code()
     challenge = OtpChallenge.objects.create(
         phone_e164=phone_e164,
         code_hash=_hash_value(code),
@@ -103,7 +109,19 @@ def send_otp(phone: str, purpose: str) -> dict:
     )
 
     try:
-        dispatch_otp(phone_e164, purpose, code)
+        if review_phone:
+            print(
+                f"[Peony OTP] play-store review phone={phone_e164} "
+                f"purpose={purpose} code={code} (SMS skipped)",
+                flush=True,
+            )
+            logger.info(
+                "Play Store review OTP for %s (%s): fixed code, SMS skipped",
+                phone_e164,
+                purpose,
+            )
+        else:
+            dispatch_otp(phone_e164, purpose, code)
     except Exception:
         challenge.delete()
         raise
@@ -116,19 +134,15 @@ def send_otp(phone: str, purpose: str) -> dict:
     }
 
 
-# Temporary testing bypass — FE can always verify with this code.
-_TEST_OTP_CODE = "0000"
-
-
 def verify_otp(phone: str, code: str) -> dict:
     phone_e164 = normalize_phone_e164(phone)
-    is_test_otp = code == _TEST_OTP_CODE
+    is_review_otp = is_play_store_review_otp(phone_e164, code)
 
     challenge_qs = OtpChallenge.objects.filter(
         phone_e164=phone_e164,
         consumed_at__isnull=True,
     )
-    if not is_test_otp:
+    if not is_review_otp:
         challenge_qs = challenge_qs.filter(expires_at__gt=timezone.now())
     challenge = challenge_qs.order_by("-created_at").first()
 
@@ -139,14 +153,14 @@ def verify_otp(phone: str, code: str) -> dict:
             http_status=400,
         )
 
-    if not is_test_otp and challenge.attempts >= settings.OTP_MAX_ATTEMPTS:
+    if not is_review_otp and challenge.attempts >= settings.OTP_MAX_ATTEMPTS:
         raise PeonyAPIException(
             code="OTP_MAX_ATTEMPTS",
             message="Maximum OTP attempts exceeded. Request a new code.",
             http_status=429,
         )
 
-    if not is_test_otp and _hash_value(code) != challenge.code_hash:
+    if not is_review_otp and _hash_value(code) != challenge.code_hash:
         challenge.attempts += 1
         challenge.save(update_fields=["attempts"])
         raise PeonyAPIException(

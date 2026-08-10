@@ -98,4 +98,4 @@ class RestaurantReviewAdmin(admin.ModelAdmin):
     readonly_fields = ("id", "created_at", "updated_at")
     autocomplete_fields = ("receiver", "restaurant")
     filter_horizontal = ("tags",)
-    ordering = ("-created_at",)
+    ordering = ("-created_at",) 

@@ -1,0 +1,138 @@
+{% extends "legal/base_legal.html" %}
+
+{% block toc %}
+<nav class="toc" aria-label="On this page">
+  <a href="#receivers">Receivers</a>
+  <a href="#restaurants">Restaurant partners</a>
+</nav>
+{% endblock %}
+
+{% block content %}
+<p>
+  UDUFood / Peony Care (“we”, “us”) helps Singapore residents find complementary
+  meals from restaurants. This Privacy Policy explains what we collect and why.
+  Sections below cover <strong>receivers</strong> and
+  <strong>restaurant partners</strong>.
+</p>
+
+<h2 id="receivers">Receivers</h2>
+
+<h3>What we collect</h3>
+<ul>
+  <li><strong>Account:</strong> your first name and Singapore mobile number.</li>
+  <li><strong>Location:</strong> only when you enable GPS to find food near you.</li>
+  <li><strong>Activity:</strong> claims, pickup history, and no-show count.</li>
+</ul>
+
+<h3>How we use it</h3>
+<p>
+  We use your data to show food donations near you, send SMS verification codes,
+  and remind you about pickups you've claimed. We don't sell your data — ever.
+</p>
+
+<h3>PDPA compliance</h3>
+<p>
+  Peony Care complies with Singapore's Personal Data Protection Act (PDPA).
+  You can request to view, correct, or delete your data at any time by emailing
+  <a href="mailto:privacy@udufood.sg">privacy@udufood.sg</a>.
+</p>
+
+<h3>Sharing</h3>
+<p>
+  Restaurants only see your claim code and first name at pickup. They never see
+  your phone number, location, or claim history. Donors never see any of your
+  details.
+</p>
+
+<h3>How long we keep it</h3>
+<p>
+  Your data is retained while your account is open. After deletion, personal data
+  is removed within 30 days. Anonymised claim statistics may be retained for
+  impact reporting.
+</p>
+
+<h3>Service providers</h3>
+<p>We use trusted third parties to operate the app. None receive more data than they need:</p>
+<ul>
+  <li><strong>Twilio</strong> — SMS delivery for OTP codes.</li>
+  <li><strong>Cloudflare</strong> — security and DDoS protection.</li>
+  <li><strong>Iconify</strong> — icon assets (no personal data).</li>
+</ul>
+
+<h3>Where your data lives</h3>
+<p>
+  All personal data is stored in Singapore on AWS ap-southeast-1. It does not
+  leave Singapore except for transient transmission to the service providers
+  listed above.
+</p>
+
+<h3>Age requirement</h3>
+<p>
+  Peony Care is for users aged 16 and above. We do not knowingly collect data
+  from anyone under 16. If you believe a minor has signed up, email
+  <a href="mailto:privacy@udufood.sg">privacy@udufood.sg</a> and we'll remove
+  the account.
+</p>
+
+<h2 id="restaurants">Restaurant partners</h2>
+
+<h3>What we collect</h3>
+<ul>
+  <li><strong>Business:</strong> restaurant name, UEN, address, opening hours.</li>
+  <li><strong>Contact:</strong> owner/manager name, business email, business mobile.</li>
+  <li><strong>Operations:</strong> donations posted, claims received, sponsored orders, payout history.</li>
+</ul>
+
+<h3>How we use it</h3>
+<p>
+  We use your data to list your restaurant on the platform for receivers to find,
+  manage claims and sponsored orders, and pay you for sponsored donations.
+  We don't sell your data — ever.
+</p>
+
+<h3>PDPA compliance</h3>
+<p>
+  Peony Care complies with Singapore's Personal Data Protection Act (PDPA).
+  You can request to view, correct, or delete your business profile at any time
+  by emailing <a href="mailto:privacy@udufood.sg">privacy@udufood.sg</a>.
+</p>
+
+<h3>What's public vs private</h3>
+<ul>
+  <li><strong>Public:</strong> your restaurant name, address, hours, and dish photos — visible to all receivers and donors.</li>
+  <li><strong>Private:</strong> your contact email, contact mobile, UEN, and payout records — never shown to other users.</li>
+</ul>
+
+<h3>How long we keep it</h3>
+<p>
+  Business data is retained while your restaurant account is open. After deletion:
+  contact details removed within 30 days; UEN and tax-related records retained
+  7 years per ACRA and IRAS requirements; payout records retained 7 years.
+</p>
+
+<h3>Service providers</h3>
+<p>We use trusted third parties to operate the platform:</p>
+<ul>
+  <li><strong>Twilio</strong> — SMS delivery for OTP codes.</li>
+  <li><strong>Stripe</strong> — payout processing for sponsored donations.</li>
+  <li><strong>Cloudflare</strong> — security and DDoS protection.</li>
+  <li><strong>Iconify</strong> — icon assets (no personal data).</li>
+</ul>
+
+<h3>Where your data lives</h3>
+<p>
+  Business data is stored in Singapore on AWS ap-southeast-1. Payment data is
+  processed by Stripe (Singapore region).
+</p>
+
+<h3>Age requirement</h3>
+<p>
+  Restaurant accounts must be opened by an authorised representative aged 18 or
+  above. We rely on ACRA UEN verification to confirm business authenticity.
+</p>
+
+<p class="note">
+  Questions about your data?
+  Email <a href="mailto:privacy@udufood.sg">privacy@udufood.sg</a>.
+</p>
+{% endblock %}

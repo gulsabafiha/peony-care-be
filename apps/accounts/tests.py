@@ -218,6 +218,73 @@ class TestUserManager:
         assert user.check_password("StrongTestPass123!") is True
 
 
+class TestPlayStoreReviewOtp:
+    REVIEW_PHONE = "+6599990001"
+
+    def test_review_phone_skips_sms_and_accepts_fixed_otp(self, api_client, settings):
+        settings.PLAY_STORE_REVIEW_PHONES = self.REVIEW_PHONE
+        settings.PLAY_STORE_REVIEW_OTP = "1234"
+        settings.OTP_PROVIDER = "sns"
+
+        from apps.accounts.models import ReceiverProfile
+
+        user = User.objects.create_user(
+            phone_e164=self.REVIEW_PHONE,
+            role=UserRole.RECEIVER,
+            is_active=True,
+        )
+        ReceiverProfile.objects.create(
+            user=user,
+            display_name="Play Store Reviewer",
+            latitude=1.3521,
+            longitude=103.8198,
+        )
+
+        with patch("apps.accounts.services.dispatch_otp") as mock_dispatch:
+            send = api_client.post(
+                reverse("auth-otp-send"),
+                {"phone": self.REVIEW_PHONE, "purpose": OtpPurpose.LOGIN},
+                format="json",
+            )
+        assert send.status_code == 200
+        mock_dispatch.assert_not_called()
+
+        verify = api_client.post(
+            reverse("auth-otp-verify"),
+            {"phone": self.REVIEW_PHONE, "code": "1234"},
+            format="json",
+        )
+        assert verify.status_code == 200
+        assert "access" in verify.json()["data"]
+
+    def test_fixed_otp_rejected_for_normal_phone(self, api_client, settings):
+        settings.PLAY_STORE_REVIEW_PHONES = self.REVIEW_PHONE
+        settings.PLAY_STORE_REVIEW_OTP = "1234"
+
+        user = User.objects.create_user(
+            phone_e164=PHONE,
+            role=UserRole.RECEIVER,
+            is_active=True,
+        )
+        from apps.accounts.models import ReceiverProfile
+
+        ReceiverProfile.objects.create(
+            user=user,
+            display_name="Sarah",
+            latitude=1.3521,
+            longitude=103.8198,
+        )
+        _create_otp(phone=PHONE, purpose=OtpPurpose.LOGIN, code="5678")
+
+        response = api_client.post(
+            reverse("auth-otp-verify"),
+            {"phone": PHONE, "code": "1234"},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "INVALID_OTP"
+
+
 class TestOtpVerify:
     @patch("apps.accounts.services._generate_otp_code", return_value=OTP_CODE)
     def test_verify_register_returns_registration_token(self, _mock_code, api_client):

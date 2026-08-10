@@ -65,6 +65,30 @@ docker compose exec web python manage.py seed_data --clear-only
 
 App users log in via OTP (`OTP_PROVIDER=console` prints codes in `docker compose logs -f web`).
 
+### Play Store review accounts
+
+Seed reviewer logins (fixed OTP, SMS skipped):
+
+```bash
+docker compose exec web python manage.py seed_play_store_review
+```
+
+| Role | Phone | OTP |
+|------|-------|-----|
+| Receiver | `+6599990001` | `1234` |
+| Restaurant | `+6599990002` | `1234` |
+
+Configure via `PLAY_STORE_REVIEW_PHONES` and `PLAY_STORE_REVIEW_OTP`. Put these credentials in the Play Console review notes.
+
+### Privacy & Terms (Play Store URLs)
+
+| URL | Page |
+|-----|------|
+| `https://udufood.com/privacy` | Privacy Policy (receivers + restaurants) |
+| `https://udufood.com/terms` | Terms of Use (receivers + restaurants) |
+
+Also available on the API host (`https://api.udufood.com/privacy`). For the apex domain, point Namecheap `@` A record to the Elastic IP and add `udufood.com` to nginx `server_name` + `ALLOWED_HOSTS`.
+
 ## Local development (without Docker)
 
 ```bash
