@@ -522,5 +522,5 @@ class TestSwaggerSchema:
     def test_schema_endpoint_available(self, api_client):
         response = api_client.get(reverse("schema"))
         assert response.status_code == 200
-        assert b"Peony Care API" in response.content
+        assert b"UduFood API" in response.content
         assert b"/api/v1/auth/otp/send/" in response.content

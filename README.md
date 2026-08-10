@@ -1,6 +1,6 @@
-# Peony Care Backend
+# UDUFood Backend
 
-Django REST API for the Peony Care food-share app (PostgreSQL + JWT + Docker).
+Django REST API for the UDUFood food-share app (PostgreSQL + JWT + Docker).
 
 ## Stack
 
@@ -316,7 +316,7 @@ See `.env.example`. Notable settings:
 | `DAILY_CLAIM_LIMIT` | `1` | Max claims per receiver per day |
 | `DEFAULT_BROWSE_RADIUS_KM` | `5` | Default browse radius |
 | `PAYNOW_UEN` | — | PayNow UEN for money donations |
-| `PAYNOW_ACCOUNT_NAME` | `Peony Care Ltd` | PayNow display name |
+| `PAYNOW_ACCOUNT_NAME` | `UDUFood Ltd` | PayNow display name |
 
 ## Tests
 

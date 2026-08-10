@@ -35,12 +35,12 @@ def build_receiver_data_pdf(user: User) -> bytes:
         rightMargin=2 * cm,
         topMargin=2 * cm,
         bottomMargin=2 * cm,
-        title="Peony Care Personal Data Export",
+        title="UduFood Personal Data Export",
     )
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name="Meta", parent=styles["Normal"], textColor=colors.grey))
     story = [
-        Paragraph("Peony Care", styles["Title"]),
+        Paragraph("UduFood", styles["Title"]),
         Paragraph("Personal Data Export (PDPA)", styles["Heading1"]),
         Paragraph(f"Generated: {data['exported_at']}", styles["Meta"]),
         Spacer(1, 0.4 * cm),
@@ -134,12 +134,12 @@ def build_restaurant_data_pdf(user: User) -> bytes:
         rightMargin=2 * cm,
         topMargin=2 * cm,
         bottomMargin=2 * cm,
-        title="Peony Care Restaurant Data Export",
+        title="UduFood Restaurant Data Export",
     )
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name="Meta", parent=styles["Normal"], textColor=colors.grey))
     story = [
-        Paragraph("Peony Care", styles["Title"]),
+        Paragraph("UduFood", styles["Title"]),
         Paragraph("Restaurant Data Export (PDPA)", styles["Heading1"]),
         Paragraph(f"Generated: {data['exported_at']}", styles["Meta"]),
         Spacer(1, 0.4 * cm),

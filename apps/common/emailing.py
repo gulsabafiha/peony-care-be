@@ -19,24 +19,24 @@ def send_restaurant_data_export_email(
     """Send a secure download link. Returns True if dispatch succeeded."""
     if not to_email or not str(to_email).strip():
         logger.warning(
-            "[Peony Export Email] skipped — no business email for %s",
+            "[UduFood Export Email] skipped — no business email for %s",
             restaurant_name,
         )
         return False
 
-    subject = "Your Peony Care data export is ready"
+    subject = "Your UduFood data export is ready"
     body = (
         f"Hello {restaurant_name},\n\n"
-        "Your Peony Care business data export is ready.\n\n"
+        "Your UduFood business data export is ready.\n\n"
         f"Secure download link:\n{download_url}\n\n"
-        "If you did not request this export, contact partners@peonycare.sg.\n\n"
-        "— Peony Care"
+        "If you did not request this export, contact support@udufood.com.\n\n"
+        "— UduFood"
     )
     try:
         send_mail(
             subject=subject,
             message=body,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "partners@peonycare.sg"),
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "support@udufood.com"),
             recipient_list=[to_email.strip()],
             fail_silently=False,
         )
