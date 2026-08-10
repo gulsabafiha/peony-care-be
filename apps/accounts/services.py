@@ -17,7 +17,11 @@ from apps.accounts.models import (
     RestaurantProfile,
     User,
 )
-from apps.accounts.otp_sms import dispatch_otp
+from apps.accounts.otp_sms import (
+    check_twilio_verify_otp,
+    dispatch_otp,
+    uses_twilio_verify,
+)
 from apps.accounts.play_store_review import (
     is_play_store_review_otp,
     is_play_store_review_phone,
@@ -160,15 +164,30 @@ def verify_otp(phone: str, code: str) -> dict:
             http_status=429,
         )
 
-    if not is_review_otp and _hash_value(code) != challenge.code_hash:
-        challenge.attempts += 1
-        challenge.save(update_fields=["attempts"])
-        raise PeonyAPIException(
-            code="INVALID_OTP",
-            message="Incorrect OTP code.",
-            details={"attempts_remaining": settings.OTP_MAX_ATTEMPTS - challenge.attempts},
-            http_status=400,
-        )
+    if not is_review_otp:
+        if uses_twilio_verify():
+            if not check_twilio_verify_otp(phone_e164, code):
+                challenge.attempts += 1
+                challenge.save(update_fields=["attempts"])
+                raise PeonyAPIException(
+                    code="INVALID_OTP",
+                    message="Incorrect OTP code.",
+                    details={
+                        "attempts_remaining": settings.OTP_MAX_ATTEMPTS - challenge.attempts
+                    },
+                    http_status=400,
+                )
+        elif _hash_value(code) != challenge.code_hash:
+            challenge.attempts += 1
+            challenge.save(update_fields=["attempts"])
+            raise PeonyAPIException(
+                code="INVALID_OTP",
+                message="Incorrect OTP code.",
+                details={
+                    "attempts_remaining": settings.OTP_MAX_ATTEMPTS - challenge.attempts
+                },
+                http_status=400,
+            )
 
     challenge.consumed_at = timezone.now()
     challenge.save(update_fields=["consumed_at"])

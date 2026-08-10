@@ -133,6 +133,11 @@ OTP_SMS_SENDER_ID = config("OTP_SMS_SENDER_ID", default="")
 OTP_EXPIRY_MINUTES = config("OTP_EXPIRY_MINUTES", default=1, cast=int)
 OTP_MAX_ATTEMPTS = config("OTP_MAX_ATTEMPTS", default=5, cast=int)
 OTP_RESEND_COOLDOWN_SECONDS = config("OTP_RESEND_COOLDOWN_SECONDS", default=60, cast=int)
+# Twilio Verify (when OTP_PROVIDER=twilio)
+TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="")
+TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN", default="")
+TWILIO_VERIFY_SERVICE_SID = config("TWILIO_VERIFY_SERVICE_SID", default="")
+TWILIO_VERIFY_CODE_LENGTH = config("TWILIO_VERIFY_CODE_LENGTH", default=4, cast=int)
 # Play Store reviewers: comma-separated E.164 phones; fixed OTP; SMS skipped
 PLAY_STORE_REVIEW_PHONES = config(
     "PLAY_STORE_REVIEW_PHONES",

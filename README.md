@@ -311,12 +311,12 @@ See `.env.example`. Notable settings:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OTP_PROVIDER` | `console` | `console` prints OTP to logs; `sns` sends SMS via AWS SNS |
+| `OTP_PROVIDER` | `console` | `console` prints OTP to logs; `sns` uses AWS SNS; `twilio` uses Twilio Verify |
 | `MAX_CLAIM_DISTANCE_M` | `500` | Max distance (m) between receiver and restaurant to claim |
 | `DAILY_CLAIM_LIMIT` | `1` | Max claims per receiver per day |
 | `DEFAULT_BROWSE_RADIUS_KM` | `5` | Default browse radius |
 | `PAYNOW_UEN` | — | PayNow UEN for money donations |
-| `PAYNOW_ACCOUNT_NAME` | `UDUFood Ltd` | PayNow display name |
+| `PAYNOW_ACCOUNT_NAME` | `UduFood Ltd` | PayNow display name |
 
 ## Tests
 
