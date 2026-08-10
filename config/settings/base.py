@@ -138,6 +138,9 @@ TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="")
 TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN", default="")
 TWILIO_VERIFY_SERVICE_SID = config("TWILIO_VERIFY_SERVICE_SID", default="")
 TWILIO_VERIFY_CODE_LENGTH = config("TWILIO_VERIFY_CODE_LENGTH", default=4, cast=int)
+# Temporary: accept fixed bypass OTP while Twilio Verify is blocked (set False when Twilio works)
+OTP_ALLOW_DEV_BYPASS = config("OTP_ALLOW_DEV_BYPASS", default=True, cast=bool)
+OTP_DEV_BYPASS_CODE = config("OTP_DEV_BYPASS_CODE", default="0000")
 # Play Store reviewers: comma-separated E.164 phones; fixed OTP; SMS skipped
 PLAY_STORE_REVIEW_PHONES = config(
     "PLAY_STORE_REVIEW_PHONES",

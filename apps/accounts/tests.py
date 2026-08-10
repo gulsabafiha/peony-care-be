@@ -264,6 +264,7 @@ class TestPlayStoreReviewOtp:
     ):
         settings.OTP_PROVIDER = "twilio"
         settings.PLAY_STORE_REVIEW_PHONES = ""
+        settings.OTP_ALLOW_DEV_BYPASS = False
 
         from apps.accounts.models import ReceiverProfile
 
@@ -301,6 +302,7 @@ class TestPlayStoreReviewOtp:
     def test_fixed_otp_rejected_for_normal_phone(self, api_client, settings):
         settings.PLAY_STORE_REVIEW_PHONES = self.REVIEW_PHONE
         settings.PLAY_STORE_REVIEW_OTP = "1234"
+        settings.OTP_ALLOW_DEV_BYPASS = False
 
         user = User.objects.create_user(
             phone_e164=PHONE,
@@ -324,6 +326,43 @@ class TestPlayStoreReviewOtp:
         )
         assert response.status_code == 400
         assert response.json()["error"]["code"] == "INVALID_OTP"
+
+    def test_dev_bypass_0000_works_when_enabled(self, api_client, settings):
+        settings.OTP_ALLOW_DEV_BYPASS = True
+        settings.OTP_DEV_BYPASS_CODE = "0000"
+        settings.OTP_PROVIDER = "twilio"
+        settings.PLAY_STORE_REVIEW_PHONES = ""
+
+        from apps.accounts.models import ReceiverProfile
+
+        user = User.objects.create_user(
+            phone_e164=PHONE,
+            role=UserRole.RECEIVER,
+            is_active=True,
+        )
+        ReceiverProfile.objects.create(
+            user=user,
+            display_name="Sarah",
+            latitude=1.3521,
+            longitude=103.8198,
+        )
+
+        with patch("apps.accounts.services.dispatch_otp") as mock_dispatch:
+            send = api_client.post(
+                reverse("auth-otp-send"),
+                {"phone": PHONE, "purpose": OtpPurpose.LOGIN},
+                format="json",
+            )
+        assert send.status_code == 200
+        mock_dispatch.assert_not_called()
+
+        verify = api_client.post(
+            reverse("auth-otp-verify"),
+            {"phone": PHONE, "code": "0000"},
+            format="json",
+        )
+        assert verify.status_code == 200
+        assert "access" in verify.json()["data"]
 
 
 class TestOtpVerify:

@@ -124,6 +124,19 @@ def send_otp(phone: str, purpose: str) -> dict:
                 phone_e164,
                 purpose,
             )
+        elif getattr(settings, "OTP_ALLOW_DEV_BYPASS", False):
+            # Temporary while Twilio Verify upgrade/review blocks SMS.
+            bypass = (getattr(settings, "OTP_DEV_BYPASS_CODE", "") or "0000").strip()
+            print(
+                f"[Peony OTP] DEV BYPASS enabled phone={phone_e164} "
+                f"purpose={purpose} use_code={bypass} (SMS skipped)",
+                flush=True,
+            )
+            logger.warning(
+                "OTP_ALLOW_DEV_BYPASS: SMS skipped for %s; accept code %s",
+                phone_e164,
+                bypass,
+            )
         else:
             dispatch_otp(phone_e164, purpose, code)
     except Exception:
@@ -138,15 +151,24 @@ def send_otp(phone: str, purpose: str) -> dict:
     }
 
 
+def _is_dev_bypass_otp(code: str) -> bool:
+    if not getattr(settings, "OTP_ALLOW_DEV_BYPASS", False):
+        return False
+    bypass = (getattr(settings, "OTP_DEV_BYPASS_CODE", "") or "0000").strip()
+    return bool(bypass) and code.strip() == bypass
+
+
 def verify_otp(phone: str, code: str) -> dict:
     phone_e164 = normalize_phone_e164(phone)
     is_review_otp = is_play_store_review_otp(phone_e164, code)
+    is_dev_bypass = _is_dev_bypass_otp(code)
+    skip_strict_checks = is_review_otp or is_dev_bypass
 
     challenge_qs = OtpChallenge.objects.filter(
         phone_e164=phone_e164,
         consumed_at__isnull=True,
     )
-    if not is_review_otp:
+    if not skip_strict_checks:
         challenge_qs = challenge_qs.filter(expires_at__gt=timezone.now())
     challenge = challenge_qs.order_by("-created_at").first()
 
@@ -157,14 +179,14 @@ def verify_otp(phone: str, code: str) -> dict:
             http_status=400,
         )
 
-    if not is_review_otp and challenge.attempts >= settings.OTP_MAX_ATTEMPTS:
+    if not skip_strict_checks and challenge.attempts >= settings.OTP_MAX_ATTEMPTS:
         raise PeonyAPIException(
             code="OTP_MAX_ATTEMPTS",
             message="Maximum OTP attempts exceeded. Request a new code.",
             http_status=429,
         )
 
-    if not is_review_otp:
+    if not skip_strict_checks:
         if uses_twilio_verify():
             if not check_twilio_verify_otp(phone_e164, code):
                 challenge.attempts += 1
