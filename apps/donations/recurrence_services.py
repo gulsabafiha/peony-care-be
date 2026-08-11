@@ -131,7 +131,7 @@ def _archive_expired_listings(series_id: UUID, tz) -> None:
 @transaction.atomic
 def _repost_series(series_id: UUID, target_day: date | None = None) -> FoodItem | None:
     latest = (
-        FoodItem.objects.select_for_update()
+        FoodItem.objects.select_for_update(of=("self",))
         .select_related("restaurant", "individual_donor")
         .filter(recurrence_series_id=series_id)
         .order_by("-created_at")
