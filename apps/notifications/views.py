@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import IsAuthenticated
 
@@ -7,6 +7,9 @@ from apps.common.permissions import IsRestaurant
 from apps.common.schema import enveloped_schema
 from apps.notifications import services, settings_services
 from apps.notifications.serializers import (
+    MarkAllReadSerializer,
+    NotificationItemSerializer,
+    NotificationListSerializer,
     NotificationSettingsSerializer,
     NotificationSettingsUpdateSerializer,
     UnreadCountSerializer,
@@ -23,6 +26,71 @@ class UnreadCountView(GenericAPIView):
     )
     def get(self, request):
         return success_response(services.get_unread_count(request.user))
+
+
+class NotificationListView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="List notifications",
+        parameters=[
+            OpenApiParameter(
+                name="unread_only",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="If true, return only unread notifications.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Max items to return (1–100, default 50).",
+            ),
+        ],
+        responses={200: enveloped_schema(NotificationListSerializer, "NotificationListEnvelope")},
+    )
+    def get(self, request):
+        unread_raw = request.query_params.get("unread_only", "").lower()
+        unread_only = unread_raw in {"1", "true", "yes"}
+        try:
+            limit = int(request.query_params.get("limit", services.DEFAULT_NOTIFICATION_LIMIT))
+        except (TypeError, ValueError):
+            limit = services.DEFAULT_NOTIFICATION_LIMIT
+        data = services.list_notifications(
+            request.user,
+            unread_only=unread_only,
+            limit=limit,
+        )
+        return success_response(data)
+
+
+class MarkNotificationReadView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Mark a notification as read",
+        responses={200: enveloped_schema(NotificationItemSerializer, "NotificationReadEnvelope")},
+    )
+    def post(self, request, notification_id):
+        data = services.mark_notification_read(request.user, str(notification_id))
+        return success_response(data, message="Notification marked as read.")
+
+
+class MarkAllNotificationsReadView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Mark all notifications as read",
+        responses={200: enveloped_schema(MarkAllReadSerializer, "NotificationMarkAllReadEnvelope")},
+    )
+    def post(self, request):
+        data = services.mark_all_notifications_read(request.user)
+        return success_response(data, message="All notifications marked as read.")
 
 
 class RestaurantNotificationSettingsView(GenericAPIView):

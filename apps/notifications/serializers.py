@@ -5,6 +5,27 @@ class UnreadCountSerializer(serializers.Serializer):
     unread_count = serializers.IntegerField()
 
 
+class NotificationItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    type = serializers.CharField()
+    title = serializers.CharField()
+    body = serializers.CharField()
+    payload = serializers.DictField()
+    is_read = serializers.BooleanField()
+    read_at = serializers.DateTimeField(allow_null=True)
+    created_at = serializers.DateTimeField()
+
+
+class NotificationListSerializer(serializers.Serializer):
+    items = NotificationItemSerializer(many=True)
+    unread_count = serializers.IntegerField()
+
+
+class MarkAllReadSerializer(serializers.Serializer):
+    marked_read = serializers.IntegerField()
+    unread_count = serializers.IntegerField()
+
+
 class NotificationSettingsSerializer(serializers.Serializer):
     push_enabled = serializers.BooleanField()
     email_enabled = serializers.BooleanField()

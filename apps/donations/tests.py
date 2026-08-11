@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import RestaurantProfile, User
+from apps.accounts.models import ReceiverProfile, RestaurantProfile, User
 from apps.common.choices import ClosedReason, FoodStatus, ListStatus, UserRole
 from apps.donations.models import FoodItem
 from apps.notifications.models import Notification
@@ -546,6 +546,84 @@ class TestNotificationsUnreadCount:
 
         dashboard = client.get(reverse("restaurant_donations:restaurant-dashboard"))
         assert dashboard.json()["data"]["unread_alerts_count"] == 1
+
+
+class TestNearbyReceiverNotifications:
+    def test_create_donation_notifies_nearby_receivers(self, api_client, restaurant_user):
+        nearby_user = User.objects.create_user(
+            phone_e164="+6591111111",
+            role=UserRole.RECEIVER,
+            is_active=True,
+        )
+        ReceiverProfile.objects.create(
+            user=nearby_user,
+            display_name="Nearby Receiver",
+            latitude=LAT,
+            longitude=LNG,
+            browse_radius_km=5.0,
+            location_services_enabled=True,
+        )
+
+        far_user = User.objects.create_user(
+            phone_e164="+6591111112",
+            role=UserRole.RECEIVER,
+            is_active=True,
+        )
+        ReceiverProfile.objects.create(
+            user=far_user,
+            display_name="Far Receiver",
+            latitude=1.4500,
+            longitude=103.8200,
+            browse_radius_km=5.0,
+            location_services_enabled=True,
+        )
+
+        disabled_user = User.objects.create_user(
+            phone_e164="+6591111113",
+            role=UserRole.RECEIVER,
+            is_active=True,
+        )
+        ReceiverProfile.objects.create(
+            user=disabled_user,
+            display_name="Location Off",
+            latitude=LAT,
+            longitude=LNG,
+            browse_radius_km=5.0,
+            location_services_enabled=False,
+        )
+
+        client = auth_client(api_client, restaurant_user)
+        now = timezone.now()
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Chicken Rice",
+                "category": "RICE",
+                "quantity": 5,
+                "pickup_start": now.isoformat(),
+                "pickup_end": (now + timedelta(hours=2)).isoformat(),
+                "recurrence_type": "NONE",
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["estimated_reach"] == 1
+
+        food_id = data["id"]
+        nearby_notes = Notification.objects.filter(
+            user=nearby_user,
+            type="NEW_FOOD_NEARBY",
+        )
+        assert nearby_notes.count() == 1
+        note = nearby_notes.get()
+        assert note.title == "New food near you"
+        assert "Chicken Rice" in note.body
+        assert note.payload["food_id"] == food_id
+        assert note.payload["restaurant_id"] == str(restaurant_user.restaurant_profile.id)
+
+        assert not Notification.objects.filter(user=far_user).exists()
+        assert not Notification.objects.filter(user=disabled_user).exists()
 
 
 class TestRestaurantProfile:

@@ -44,6 +44,7 @@ from apps.common.uploads import (
 )
 from apps.donations.models import FoodItem
 from apps.notifications.models import Notification
+from apps.notifications.services import notify_nearby_receivers_of_new_food
 
 
 def get_restaurant_profile(user: User) -> RestaurantProfile:
@@ -541,23 +542,28 @@ def _category_label(category: str) -> str:
         return category.title()
 
 
-def _estimate_receiver_reach(restaurant: RestaurantProfile) -> dict:
+def _nearby_receivers(
+    restaurant: RestaurantProfile,
+) -> list[tuple[ReceiverProfile, float]]:
+    """Return (receiver_profile, distance_m) for receivers within browse range."""
     radius_km = float(settings.DEFAULT_BROWSE_RADIUS_KM)
     lat = float(restaurant.latitude)
     lng = float(restaurant.longitude)
     min_lat, max_lat, min_lng, max_lng = bounding_box(lat, lng, radius_km)
 
     candidates = ReceiverProfile.objects.filter(
+        location_services_enabled=True,
         latitude__isnull=False,
         longitude__isnull=False,
         latitude__gte=min_lat,
         latitude__lte=max_lat,
         longitude__gte=min_lng,
         longitude__lte=max_lng,
-    ).only("latitude", "longitude")
+        user__is_active=True,
+    ).select_related("user")
 
     radius_m = radius_km * 1000
-    count = 0
+    nearby: list[tuple[ReceiverProfile, float]] = []
     for receiver in candidates:
         distance_m = haversine_distance_m(
             lat,
@@ -565,11 +571,18 @@ def _estimate_receiver_reach(restaurant: RestaurantProfile) -> dict:
             float(receiver.latitude),
             float(receiver.longitude),
         )
-        if distance_m <= radius_m:
-            count += 1
+        receiver_radius_m = float(receiver.browse_radius_km or radius_km) * 1000
+        # Must be within the default search area and the receiver's own browse radius.
+        if distance_m <= radius_m and distance_m <= receiver_radius_m:
+            nearby.append((receiver, distance_m))
+    return nearby
 
+
+def _estimate_receiver_reach(restaurant: RestaurantProfile) -> dict:
+    radius_km = float(settings.DEFAULT_BROWSE_RADIUS_KM)
+    nearby = _nearby_receivers(restaurant)
     return {
-        "count": count,
+        "count": len(nearby),
         "radius_km": int(radius_km) if radius_km.is_integer() else radius_km,
     }
 
@@ -578,10 +591,16 @@ def _build_post_success_payload(
     food: FoodItem,
     restaurant: RestaurantProfile,
     request=None,
+    nearby_count: int | None = None,
 ) -> dict:
-    reach = _estimate_receiver_reach(restaurant)
-    radius = reach["radius_km"]
-    count = reach["count"]
+    if nearby_count is None:
+        reach = _estimate_receiver_reach(restaurant)
+        radius = reach["radius_km"]
+        count = reach["count"]
+    else:
+        radius_km = float(settings.DEFAULT_BROWSE_RADIUS_KM)
+        radius = int(radius_km) if radius_km.is_integer() else radius_km
+        count = nearby_count
     category_label = _category_label(food.category)
     unit = food.unit or "packs"
     address_short = restaurant.address.split(",")[0].strip() if restaurant.address else ""
@@ -662,8 +681,18 @@ def create_donation(user: User, data: dict, request=None) -> dict:
     restaurant.total_food_shared += data["quantity"]
     restaurant.save(update_fields=["total_food_shared"])
 
+    nearby = _nearby_receivers(restaurant)
+    notify_nearby_receivers_of_new_food(food, restaurant, nearby)
+
     result = _serialize_restaurant_donation(food)
-    result.update(_build_post_success_payload(food, restaurant, request=request))
+    result.update(
+        _build_post_success_payload(
+            food,
+            restaurant,
+            request=request,
+            nearby_count=len(nearby),
+        )
+    )
     return result
 
 
