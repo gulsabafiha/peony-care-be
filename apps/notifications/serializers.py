@@ -16,9 +16,27 @@ class NotificationItemSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
 
 
-class NotificationListSerializer(serializers.Serializer):
+class NotificationGroupSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    date = serializers.CharField()
+    count = serializers.IntegerField()
     items = NotificationItemSerializer(many=True)
+
+
+class NotificationPaginationSerializer(serializers.Serializer):
+    page = serializers.IntegerField()
+    page_size = serializers.IntegerField()
+    total_count = serializers.IntegerField()
+    total_pages = serializers.IntegerField()
+    has_next = serializers.BooleanField()
+    has_previous = serializers.BooleanField()
+
+
+class NotificationListSerializer(serializers.Serializer):
+    groups = NotificationGroupSerializer(many=True)
     unread_count = serializers.IntegerField()
+    pagination = NotificationPaginationSerializer()
 
 
 class MarkAllReadSerializer(serializers.Serializer):

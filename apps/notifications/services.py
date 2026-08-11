@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from collections import defaultdict
+from datetime import date
+
+from django.core.paginator import Paginator
 from django.utils import timezone
 
 from apps.accounts.models import ReceiverProfile, RestaurantProfile, User
 from apps.common.exceptions import PeonyAPIException
+from apps.common.timezone_utils import SGT, format_day_label, today_sgt
 from apps.donations.models import FoodItem
 from apps.notifications.models import Notification
 
-DEFAULT_NOTIFICATION_LIMIT = 50
-MAX_NOTIFICATION_LIMIT = 100
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 100
 
 
 def get_unread_count(user: User) -> dict:
@@ -30,22 +35,65 @@ def _serialize_notification(notification: Notification) -> dict:
     }
 
 
+def _notification_day(notification: Notification) -> date:
+    return notification.created_at.astimezone(SGT).date()
+
+
+def _group_notifications_by_date(
+    notifications: list[Notification],
+    *,
+    today: date | None = None,
+) -> list[dict]:
+    today = today or today_sgt()
+    buckets: dict[date, list[Notification]] = defaultdict(list)
+    for notification in notifications:
+        buckets[_notification_day(notification)].append(notification)
+
+    groups = []
+    for day in sorted(buckets.keys(), reverse=True):
+        items = buckets[day]
+        groups.append(
+            {
+                "key": day.isoformat(),
+                "label": format_day_label(day, today=today),
+                "date": day.isoformat(),
+                "count": len(items),
+                "items": [_serialize_notification(n) for n in items],
+            }
+        )
+    return groups
+
+
 def list_notifications(
     user: User,
     *,
     unread_only: bool = False,
-    limit: int = DEFAULT_NOTIFICATION_LIMIT,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
 ) -> dict:
-    limit = max(1, min(limit, MAX_NOTIFICATION_LIMIT))
-    queryset = Notification.objects.filter(user=user)
+    page = max(1, page)
+    page_size = max(1, min(page_size, MAX_PAGE_SIZE))
+
+    queryset = Notification.objects.filter(user=user).order_by("-created_at")
     if unread_only:
         queryset = queryset.filter(read_at__isnull=True)
 
-    notifications = list(queryset.order_by("-created_at")[:limit])
+    paginator = Paginator(queryset, page_size)
+    page_obj = paginator.get_page(page)
+    notifications = list(page_obj.object_list)
+
     unread_count = Notification.objects.filter(user=user, read_at__isnull=True).count()
     return {
-        "items": [_serialize_notification(n) for n in notifications],
+        "groups": _group_notifications_by_date(notifications),
         "unread_count": unread_count,
+        "pagination": {
+            "page": page_obj.number,
+            "page_size": page_size,
+            "total_count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+        },
     }
 
 

@@ -33,7 +33,7 @@ class NotificationListView(GenericAPIView):
 
     @extend_schema(
         tags=["Notifications"],
-        summary="List notifications",
+        summary="List notifications grouped by date",
         parameters=[
             OpenApiParameter(
                 name="unread_only",
@@ -43,11 +43,18 @@ class NotificationListView(GenericAPIView):
                 description="If true, return only unread notifications.",
             ),
             OpenApiParameter(
-                name="limit",
+                name="page",
                 type=int,
                 location=OpenApiParameter.QUERY,
                 required=False,
-                description="Max items to return (1–100, default 50).",
+                description="Page number (1-based, default 1).",
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Items per page (1–100, default 20).",
             ),
         ],
         responses={200: enveloped_schema(NotificationListSerializer, "NotificationListEnvelope")},
@@ -56,13 +63,20 @@ class NotificationListView(GenericAPIView):
         unread_raw = request.query_params.get("unread_only", "").lower()
         unread_only = unread_raw in {"1", "true", "yes"}
         try:
-            limit = int(request.query_params.get("limit", services.DEFAULT_NOTIFICATION_LIMIT))
+            page = int(request.query_params.get("page", 1))
         except (TypeError, ValueError):
-            limit = services.DEFAULT_NOTIFICATION_LIMIT
+            page = 1
+        try:
+            page_size = int(
+                request.query_params.get("page_size", services.DEFAULT_PAGE_SIZE)
+            )
+        except (TypeError, ValueError):
+            page_size = services.DEFAULT_PAGE_SIZE
         data = services.list_notifications(
             request.user,
             unread_only=unread_only,
-            limit=limit,
+            page=page,
+            page_size=page_size,
         )
         return success_response(data)
 
