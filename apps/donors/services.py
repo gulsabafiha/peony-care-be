@@ -20,7 +20,7 @@ from apps.common.choices import (
     SponsorshipType,
 )
 from apps.common.exceptions import PeonyAPIException
-from apps.common.timezone_utils import format_pickup_window, now_sgt
+from apps.common.timezone_utils import format_pickup_window, now_in, timezone_for_restaurant
 from apps.donations.menu_photo_services import list_public_menu_photos
 from apps.donations.models import FoodItem, MenuItem
 from apps.donors.models import MealOrder, MealOrderItem, MoneyDonation
@@ -210,7 +210,7 @@ def get_impact(user: User) -> dict:
         .order_by("created_at")
     )
     for order in meal_orders:
-        month = order.created_at.astimezone(now_sgt().tzinfo).strftime("%Y-%m")
+        month = order.created_at.astimezone(now_in().tzinfo).strftime("%Y-%m")
         bucket = monthly.setdefault(month, {"month": month, "meals": 0, "amount_sgd": "0.00"})
         bucket["meals"] += sum(item.quantity for item in order.items.all())
 
@@ -219,7 +219,7 @@ def get_impact(user: User) -> dict:
         status=MoneyDonationStatus.CONFIRMED,
     ).order_by("created_at")
     for donation in money_donations:
-        month = donation.created_at.astimezone(now_sgt().tzinfo).strftime("%Y-%m")
+        month = donation.created_at.astimezone(now_in().tzinfo).strftime("%Y-%m")
         bucket = monthly.setdefault(month, {"month": month, "meals": 0, "amount_sgd": "0.00"})
         current = Decimal(bucket["amount_sgd"])
         bucket["amount_sgd"] = str(current + donation.amount_sgd)
@@ -288,7 +288,7 @@ def _generate_qr_data(food: FoodItem) -> str:
 
 
 def _generate_reference_code(donor: DonorProfile) -> str:
-    year = now_sgt().year
+    year = now_in().year
     for _ in range(10):
         suffix = secrets.token_hex(2).upper()
         code = f"PNY-{_initials(donor.display_name)}-{year}{suffix}"
@@ -321,7 +321,7 @@ def create_meal_order(user: User, data: dict) -> dict:
             http_status=404,
         ) from exc
 
-    if data["pickup_end"] <= now_sgt():
+    if data["pickup_end"] <= now_in(timezone_for_restaurant(restaurant)):
         raise PeonyAPIException(
             code="INVALID_PICKUP_WINDOW",
             message="Pickup end must be in the future.",
@@ -422,7 +422,7 @@ def create_meal_order(user: User, data: dict) -> dict:
             "id": str(food.id),
             "name": food.name,
             "quantity_available": food.quantity_available,
-            "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
+            "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end, tz=timezone_for_restaurant(restaurant)),
             "food_qr_data": food.food_qr_data,
             "sponsor_display_name": food.sponsor_display_name or None,
             "sponsorship_type": food.sponsorship_type,
@@ -498,7 +498,7 @@ def confirm_money_transfer(user: User, donation_id: str) -> dict:
             http_status=409,
         )
 
-    donation.transfer_marked_at = now_sgt()
+    donation.transfer_marked_at = now_in()
     donation.save(update_fields=["transfer_marked_at"])
 
     return {

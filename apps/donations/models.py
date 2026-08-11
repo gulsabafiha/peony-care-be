@@ -46,6 +46,8 @@ class FoodItem(models.Model):
         default=RecurrenceType.NONE,
     )
     recurrence_days = models.JSONField(default=list, blank=True)
+    # Shared by every auto-posted listing in a DAILY/CUSTOM series.
+    recurrence_series_id = models.UUIDField(null=True, blank=True, db_index=True)
     source_note = models.TextField(blank=True, default="")
     food_qr_data = models.CharField(max_length=200, blank=True)
     food_qr_image_url = models.URLField(max_length=500, blank=True)

@@ -7,12 +7,20 @@ from apps.accounts.models import RestaurantProfile, User
 from apps.common.choices import FoodCategory, FoodStatus, ListStatus
 from apps.common.exceptions import PeonyAPIException
 from apps.common.geo import haversine_distance_m
-from apps.common.timezone_utils import bounding_box, format_pickup_window, now_sgt
+from apps.common.timezone_utils import (
+    bounding_box,
+    format_pickup_window,
+    timezone_for_restaurant,
+    to_local_iso,
+)
 from apps.donations.models import FoodItem, FoodReport, FoodReportReasonOption
 
 
 def _base_available_queryset():
-    now = now_sgt()
+    # Compare against UTC "now" so availability is absolute; display uses restaurant TZ.
+    from django.utils import timezone as dj_timezone
+
+    now = dj_timezone.now()
     return (
         FoodItem.objects.select_related("restaurant")
         .filter(
@@ -26,6 +34,7 @@ def _base_available_queryset():
 
 def _serialize_food_item(food: FoodItem, receiver_lat: float, receiver_lng: float) -> dict:
     rest = food.restaurant
+    tz = timezone_for_restaurant(rest)
     distance_m = haversine_distance_m(
         receiver_lat,
         receiver_lng,
@@ -43,9 +52,9 @@ def _serialize_food_item(food: FoodItem, receiver_lat: float, receiver_lng: floa
         "quantity_original": food.quantity_original,
         "quantity_claimed": food.quantity_claimed,
         "status": food.status,
-        "pickup_start": food.pickup_start.isoformat(),
-        "pickup_end": food.pickup_end.isoformat(),
-        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
+        "pickup_start": to_local_iso(food.pickup_start, tz),
+        "pickup_end": to_local_iso(food.pickup_end, tz),
+        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end, tz=tz),
         "distance_km": round(distance_m / 1000, 1),
         "restaurant": {
             "id": str(rest.id),
@@ -149,8 +158,10 @@ def _serialize_restaurant_browse(
 
 
 def browse_restaurants(lat: float, lng: float, radius_km: float | None = None) -> list[dict]:
+    from django.utils import timezone as dj_timezone
+
     radius = radius_km or settings.DEFAULT_BROWSE_RADIUS_KM
-    now = now_sgt()
+    now = dj_timezone.now()
     queryset = RestaurantProfile.objects.annotate(
         active_meal_count=Count("food_items", filter=_active_meal_count_filter(now)),
     )
@@ -159,6 +170,9 @@ def browse_restaurants(lat: float, lng: float, radius_km: float | None = None) -
 
 
 def browse_food(lat: float, lng: float, radius_km: float | None = None) -> list[dict]:
+    from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+    ensure_recurring_donations_posted()
     radius = radius_km or settings.DEFAULT_BROWSE_RADIUS_KM
     queryset = _base_available_queryset()
     foods = _filter_by_radius(queryset, lat, lng, radius)
@@ -172,6 +186,9 @@ def search_food(
     query: str = "",
     category: str | None = None,
 ) -> list[dict]:
+    from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+    ensure_recurring_donations_posted()
     radius = radius_km or settings.DEFAULT_BROWSE_RADIUS_KM
     queryset = _base_available_queryset()
 
@@ -214,6 +231,7 @@ def _serialize_meal_summary(food: FoodItem) -> dict:
     from apps.common.choices import SponsorshipType
     from apps.donations.restaurant_services import _initials
 
+    tz = timezone_for_restaurant(food.restaurant)
     is_sponsored = food.sponsorship_type != SponsorshipType.DIRECT
     sponsor = food.sponsor_display_name or None
     title = f"{food.name} · Sponsored" if is_sponsored else food.name
@@ -223,7 +241,10 @@ def _serialize_meal_summary(food: FoodItem) -> dict:
     if is_sponsored and sponsor:
         subtitle = f"{unit_label} · by {sponsor}"
     else:
-        subtitle = f"{unit_label} · pickup {format_pickup_window(food.pickup_start, food.pickup_end)}"
+        subtitle = (
+            f"{unit_label} · pickup "
+            f"{format_pickup_window(food.pickup_start, food.pickup_end, tz=tz)}"
+        )
     return {
         "id": str(food.id),
         "name": food.name,
@@ -236,9 +257,9 @@ def _serialize_meal_summary(food: FoodItem) -> dict:
         "quantity_original": food.quantity_original,
         "quantity_left_label": f"{food.quantity_available} left",
         "unit": unit,
-        "pickup_start": food.pickup_start.isoformat(),
-        "pickup_end": food.pickup_end.isoformat(),
-        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
+        "pickup_start": to_local_iso(food.pickup_start, tz),
+        "pickup_end": to_local_iso(food.pickup_end, tz),
+        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end, tz=tz),
         "sponsorship_type": food.sponsorship_type,
         "is_sponsored": is_sponsored,
         "sponsor_display_name": sponsor,

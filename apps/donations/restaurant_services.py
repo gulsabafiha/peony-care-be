@@ -25,7 +25,6 @@ from apps.common.geo import haversine_distance_m
 from apps.common.geocoding import extract_postal_code, resolve_restaurant_coordinates
 from apps.common.phone import normalize_phone_e164
 from apps.common.timezone_utils import (
-    SGT,
     WEEKDAY_LABELS,
     bounding_box,
     format_clock_time,
@@ -33,9 +32,11 @@ from apps.common.timezone_utils import (
     format_day_label,
     format_pickup_window,
     format_relative_ago,
-    now_sgt,
-    today_sgt,
-    week_bounds_sgt,
+    now_in,
+    timezone_for_restaurant,
+    to_local_iso,
+    today_in,
+    week_bounds_in,
 )
 from apps.common.uploads import (
     delete_stored_photo,
@@ -195,13 +196,15 @@ def _expired_count(food: FoodItem) -> int:
     return 0
 
 
-def _donation_day(food: FoodItem) -> date:
+def _donation_day(food: FoodItem, tz=None) -> date:
+    zone = tz or timezone_for_restaurant(food.restaurant)
     if food.closed_at:
-        return food.closed_at.astimezone(SGT).date()
-    return food.pickup_end.astimezone(SGT).date()
+        return food.closed_at.astimezone(zone).date()
+    return food.pickup_end.astimezone(zone).date()
 
 
 def _serialize_restaurant_donation(food: FoodItem, include_claims: bool = False) -> dict:
+    tz = timezone_for_restaurant(food.restaurant)
     percent = _percent_claimed(food)
     is_done = (
         food.status == FoodStatus.FULLY_CLAIMED
@@ -211,7 +214,7 @@ def _serialize_restaurant_donation(food: FoodItem, include_claims: bool = False)
     is_sponsored = food.sponsorship_type != SponsorshipType.DIRECT
     paused_ago = None
     if food.list_status == ListStatus.INACTIVE and food.closed_at:
-        paused_ago = f"paused {format_relative_ago(food.closed_at)}"
+        paused_ago = f"paused {format_relative_ago(food.closed_at, tz=tz)}"
     quantity_left = food.quantity_available
     recurrence_days = food.recurrence_days or []
 
@@ -234,10 +237,10 @@ def _serialize_restaurant_donation(food: FoodItem, include_claims: bool = False)
         "status": food.status,
         "list_status": food.list_status,
         "list_status_label": food.list_status.title() if food.list_status else None,
-        "pickup_start": food.pickup_start.isoformat(),
-        "pickup_end": food.pickup_end.isoformat(),
-        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
-        "time_until_close": format_countdown_until(food.pickup_end),
+        "pickup_start": to_local_iso(food.pickup_start, tz),
+        "pickup_end": to_local_iso(food.pickup_end, tz),
+        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end, tz=tz),
+        "time_until_close": format_countdown_until(food.pickup_end, tz=tz),
         "recurrence_type": food.recurrence_type,
         "recurrence_days": recurrence_days,
         "recurrence_label": _recurrence_label(food.recurrence_type, recurrence_days),
@@ -248,7 +251,7 @@ def _serialize_restaurant_donation(food: FoodItem, include_claims: bool = False)
         "sponsorship_type": food.sponsorship_type,
         "sponsor_display_name": food.sponsor_display_name or None,
         "is_sponsored": is_sponsored,
-        "closed_at": food.closed_at.isoformat() if food.closed_at else None,
+        "closed_at": to_local_iso(food.closed_at, tz) if food.closed_at else None,
         "closed_reason": food.closed_reason or None,
         "paused_ago": paused_ago,
         "expired_count": _expired_count(food),
@@ -289,10 +292,11 @@ def _group_donations(
     *,
     today: date,
     for_past: bool = False,
+    tz=None,
 ) -> list[dict]:
     buckets: dict[date, list[FoodItem]] = defaultdict(list)
     for food in foods:
-        buckets[_donation_day(food)].append(food)
+        buckets[_donation_day(food, tz=tz)].append(food)
 
     groups = []
     for day in sorted(buckets.keys(), reverse=True):
@@ -326,17 +330,21 @@ def _group_donations(
 
 def get_dashboard(user: User) -> dict:
     restaurant = get_restaurant_profile(user)
-    foods = FoodItem.objects.filter(restaurant=restaurant)
+    from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+    ensure_recurring_donations_posted(restaurant=restaurant)
+    tz = timezone_for_restaurant(restaurant)
+    foods = FoodItem.objects.filter(restaurant=restaurant).select_related("restaurant")
     claims = FoodClaim.objects.filter(
         restaurant=restaurant,
         status__in=COUNTED_CLAIM_STATUSES,
     )
 
-    now = now_sgt()
-    today = today_sgt()
+    now = now_in(tz)
+    today = today_in(tz)
     yesterday = today - timedelta(days=1)
     year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    week_start, week_end = week_bounds_sgt(today)
+    week_start, week_end = week_bounds_in(today, tz=tz)
     prev_week_start = week_start - timedelta(days=7)
 
     total_original = foods.aggregate(total=Sum("quantity_original"))["total"] or 0
@@ -346,7 +354,7 @@ def get_dashboard(user: User) -> dict:
     active_foods = list(
         foods.filter(list_status=ListStatus.ACTIVE, pickup_end__gt=now).order_by("pickup_end")
     )
-    today_active = [food for food in active_foods if _donation_day(food) == today]
+    today_active = [food for food in active_foods if _donation_day(food, tz=tz) == today]
     if not today_active:
         today_active = active_foods
 
@@ -371,19 +379,19 @@ def get_dashboard(user: User) -> dict:
         or 0
     )
     this_week_donations = foods.filter(
-        created_at__gte=datetime.combine(week_start, datetime.min.time(), tzinfo=now.tzinfo),
-        created_at__lt=datetime.combine(week_end, datetime.min.time(), tzinfo=now.tzinfo),
+        created_at__gte=datetime.combine(week_start, datetime.min.time(), tzinfo=tz),
+        created_at__lt=datetime.combine(week_end, datetime.min.time(), tzinfo=tz),
     ).count()
     inactive_this_week = foods.filter(
         list_status=ListStatus.INACTIVE,
-        closed_at__gte=datetime.combine(week_start, datetime.min.time(), tzinfo=now.tzinfo),
-        closed_at__lt=datetime.combine(week_end, datetime.min.time(), tzinfo=now.tzinfo),
+        closed_at__gte=datetime.combine(week_start, datetime.min.time(), tzinfo=tz),
+        closed_at__lt=datetime.combine(week_end, datetime.min.time(), tzinfo=tz),
     ).count()
     if inactive_this_week == 0:
         inactive_this_week = foods.filter(list_status=ListStatus.INACTIVE).count()
 
-    day_start = datetime.combine(yesterday, datetime.min.time(), tzinfo=SGT)
-    day_end = datetime.combine(today, datetime.min.time(), tzinfo=SGT)
+    day_start = datetime.combine(yesterday, datetime.min.time(), tzinfo=tz)
+    day_end = datetime.combine(today, datetime.min.time(), tzinfo=tz)
     yesterday_past = list(
         foods.filter(list_status=ListStatus.PAST)
         .filter(
@@ -460,9 +468,13 @@ def get_dashboard(user: User) -> dict:
 
 def list_donations(user: User, status: str = "active") -> dict:
     restaurant = get_restaurant_profile(user)
-    queryset = FoodItem.objects.filter(restaurant=restaurant)
-    today = today_sgt()
-    week_start, week_end = week_bounds_sgt(today)
+    from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+    ensure_recurring_donations_posted(restaurant=restaurant)
+    tz = timezone_for_restaurant(restaurant)
+    queryset = FoodItem.objects.filter(restaurant=restaurant).select_related("restaurant")
+    today = today_in(tz)
+    week_start, week_end = week_bounds_in(today, tz=tz)
 
     counts = queryset.aggregate(
         active_count=Count("id", filter=Q(list_status=ListStatus.ACTIVE)),
@@ -472,13 +484,13 @@ def list_donations(user: User, status: str = "active") -> dict:
 
     if status == "active":
         foods = list(queryset.filter(list_status=ListStatus.ACTIVE).order_by("pickup_end"))
-        groups = _group_donations(foods, today=today, for_past=False)
+        groups = _group_donations(foods, today=today, for_past=False, tz=tz)
         selected_count = counts["active_count"]
         subtitle = None
         meals_this_week = None
     elif status == "past":
         foods = list(queryset.filter(list_status=ListStatus.PAST).order_by("-pickup_end"))
-        groups = _group_donations(foods, today=today, for_past=True)
+        groups = _group_donations(foods, today=today, for_past=True, tz=tz)
         selected_count = counts["past_count"]
         meals_this_week = (
             FoodClaim.objects.filter(
@@ -623,7 +635,11 @@ def _build_post_success_payload(
             "title": food.name,
             "subtitle": f"{food.quantity_original} {unit} · {category_label}",
             "category_label": category_label,
-            "pickup_window_label": format_pickup_window(food.pickup_start, food.pickup_end),
+            "pickup_window_label": format_pickup_window(
+                food.pickup_start,
+                food.pickup_end,
+                tz=timezone_for_restaurant(restaurant),
+            ),
             "location_label": restaurant.name,
             "address_short": address_short,
         },
@@ -634,8 +650,9 @@ def _build_post_success_payload(
 @transaction.atomic
 def create_donation(user: User, data: dict, request=None) -> dict:
     restaurant = get_restaurant_profile(user)
+    tz = timezone_for_restaurant(restaurant)
 
-    now = now_sgt()
+    now = now_in(tz)
     if data["pickup_end"] <= now:
         raise PeonyAPIException(
             code="INVALID_PICKUP_WINDOW",
@@ -675,8 +692,12 @@ def create_donation(user: User, data: dict, request=None) -> dict:
         recurrence_days=recurrence_days,
         source_note=data.get("source_note", ""),
     )
+    update_fields = ["food_qr_data", "updated_at"]
     food.food_qr_data = _generate_qr_data(food)
-    food.save(update_fields=["food_qr_data", "updated_at"])
+    if recurrence_type in (RecurrenceType.DAILY, RecurrenceType.CUSTOM):
+        food.recurrence_series_id = food.id
+        update_fields.append("recurrence_series_id")
+    food.save(update_fields=update_fields)
 
     restaurant.total_food_shared += data["quantity"]
     restaurant.save(update_fields=["total_food_shared"])
@@ -765,6 +786,11 @@ def update_donation(user: User, food_id: str, data: dict) -> dict:
         recurrence_days = data.get("recurrence_days", food.recurrence_days)
         food.recurrence_type = recurrence_type
         food.recurrence_days = _validate_recurrence(recurrence_type, recurrence_days)
+        if recurrence_type in (RecurrenceType.DAILY, RecurrenceType.CUSTOM):
+            if not food.recurrence_series_id:
+                food.recurrence_series_id = food.id
+        else:
+            food.recurrence_series_id = None
 
     food.save()
     return _serialize_restaurant_donation(food)
@@ -790,7 +816,7 @@ def close_donation(user: User, food_id: str) -> dict:
         )
 
     food.list_status = ListStatus.INACTIVE
-    food.closed_at = now_sgt()
+    food.closed_at = now_in(timezone_for_restaurant(restaurant))
     food.closed_reason = ClosedReason.MANUAL
     food.save(update_fields=["list_status", "closed_at", "closed_reason", "updated_at"])
     return _serialize_restaurant_donation(food)
@@ -815,7 +841,7 @@ def reactivate_donation(user: User, food_id: str) -> dict:
             http_status=409,
         )
 
-    if food.pickup_end <= now_sgt():
+    if food.pickup_end <= now_in(timezone_for_restaurant(restaurant)):
         raise PeonyAPIException(
             code="PICKUP_WINDOW_EXPIRED",
             message="Cannot reactivate — pickup window has ended.",
@@ -1050,6 +1076,7 @@ def _hours_display(restaurant: RestaurantProfile) -> str:
 
 
 def _serialize_available_meal(food: FoodItem) -> dict:
+    tz = timezone_for_restaurant(food.restaurant)
     is_sponsored = food.sponsorship_type != SponsorshipType.DIRECT
     title = food.name
     if is_sponsored:
@@ -1061,7 +1088,10 @@ def _serialize_available_meal(food: FoodItem) -> dict:
     if is_sponsored and sponsor:
         subtitle = f"{unit_label} · by {sponsor}"
     else:
-        subtitle = f"{unit_label} · pickup {format_pickup_window(food.pickup_start, food.pickup_end)}"
+        subtitle = (
+            f"{unit_label} · pickup "
+            f"{format_pickup_window(food.pickup_start, food.pickup_end, tz=tz)}"
+        )
     return {
         "id": str(food.id),
         "name": food.name,
@@ -1074,9 +1104,9 @@ def _serialize_available_meal(food: FoodItem) -> dict:
         "quantity_original": food.quantity_original,
         "quantity_left_label": f"{food.quantity_available} left",
         "unit": unit,
-        "pickup_start": food.pickup_start.isoformat(),
-        "pickup_end": food.pickup_end.isoformat(),
-        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
+        "pickup_start": to_local_iso(food.pickup_start, tz),
+        "pickup_end": to_local_iso(food.pickup_end, tz),
+        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end, tz=tz),
         "sponsorship_type": food.sponsorship_type,
         "is_sponsored": is_sponsored,
         "sponsor_display_name": sponsor,
@@ -1154,7 +1184,7 @@ def _serialize_restaurant_detail_page(
                 restaurant=restaurant,
                 list_status=ListStatus.ACTIVE,
                 quantity_available__gt=0,
-                pickup_end__gt=now_sgt(),
+                pickup_end__gt=now_in(timezone_for_restaurant(restaurant)),
             )
             .exclude(status=FoodStatus.EXPIRED)
             .order_by("pickup_start", "name")
@@ -1204,7 +1234,9 @@ def _serialize_restaurant_profile(
                 "contact_email": restaurant.contact_email,
                 "contact_phone": restaurant.contact_phone,
                 "is_approved": restaurant.is_approved,
-                "member_since": restaurant.created_at.astimezone(SGT).strftime("%b %Y"),
+                "member_since": restaurant.created_at.astimezone(
+                    timezone_for_restaurant(restaurant)
+                ).strftime("%b %Y"),
                 "hub": hub,
                 "people_fed": hub["people_fed"],
                 "donations_count": hub["donations_count"],

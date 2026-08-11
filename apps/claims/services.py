@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.conf import settings
 from django.db import transaction
@@ -19,23 +19,30 @@ from apps.common.exceptions import PeonyAPIException
 from apps.common.geo import haversine_distance_m
 from apps.common.timezone_utils import (
     format_pickup_window,
-    next_midnight_sgt,
-    now_sgt,
-    today_sgt,
+    next_midnight_in,
+    now_in,
+    timezone_for_phone,
+    timezone_for_restaurant,
+    today_in,
 )
 from apps.donations.models import FoodItem
 from apps.notifications.models import Notification
 
 
 def get_daily_limit_status(receiver: User) -> dict:
+    tz = timezone_for_phone(receiver.phone_e164)
+    today = today_in(tz)
+    day_start = datetime.combine(today, time.min, tzinfo=tz)
+    day_end = day_start + timedelta(days=1)
     used = FoodClaim.objects.filter(
         receiver=receiver,
-        claim_date=today_sgt(),
+        claimed_at__gte=day_start,
+        claimed_at__lt=day_end,
         status__in=DAILY_LIMIT_CLAIM_STATUSES,
     ).count()
     limit = settings.DAILY_CLAIM_LIMIT
-    resets_at = next_midnight_sgt()
-    seconds_until_reset = max(0, int((resets_at - now_sgt()).total_seconds()))
+    resets_at = next_midnight_in(tz)
+    seconds_until_reset = max(0, int((resets_at - now_in(tz)).total_seconds()))
     return {
         "used": used,
         "limit": limit,
@@ -66,6 +73,7 @@ def _validate_qr_payload(qr_payload: str, food: FoodItem) -> None:
 def _serialize_claim_response(claim: FoodClaim, distance_km: float) -> dict:
     food = claim.food
     restaurant = claim.restaurant
+    tz = timezone_for_restaurant(restaurant)
     return {
         "claim_id": str(claim.id),
         "status": claim.status,
@@ -73,7 +81,7 @@ def _serialize_claim_response(claim: FoodClaim, distance_km: float) -> dict:
         "restaurant_name": restaurant.name,
         "pickup_address": restaurant.address,
         "distance_km": round(distance_km, 1),
-        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end),
+        "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end, tz=tz),
         "claimed_at": claim.claimed_at.isoformat(),
         "message": "Show this confirmation at the counter to collect your meal.",
         "daily_limit": get_daily_limit_status(claim.receiver),
@@ -88,7 +96,7 @@ def _update_food_after_claim(food: FoodItem) -> None:
         food.quantity_available = 0
         food.status = FoodStatus.FULLY_CLAIMED
         food.list_status = ListStatus.PAST
-        food.closed_at = now_sgt()
+        food.closed_at = now_in(timezone_for_restaurant(food.restaurant))
         food.closed_reason = "FULLY_CLAIMED"
     elif food.quantity_claimed > 0:
         food.status = FoodStatus.PARTIALLY_CLAIMED
@@ -153,7 +161,9 @@ def create_claim(
             http_status=410,
         ) from exc
 
-    now = now_sgt()
+    restaurant_tz = timezone_for_restaurant(food.restaurant)
+    receiver_tz = timezone_for_phone(receiver.phone_e164)
+    now = now_in(restaurant_tz)
     if (
         food.list_status != ListStatus.ACTIVE
         or food.quantity_available <= 0
@@ -183,11 +193,14 @@ def create_claim(
             http_status=403,
         )
 
-    # Re-check daily limit inside transaction.
+    # Re-check daily limit inside transaction (receiver local calendar day).
+    day_start = datetime.combine(today_in(receiver_tz), time.min, tzinfo=receiver_tz)
+    day_end = day_start + timedelta(days=1)
     if (
         FoodClaim.objects.filter(
             receiver=receiver,
-            claim_date=today_sgt(),
+            claimed_at__gte=day_start,
+            claimed_at__lt=day_end,
             status__in=DAILY_LIMIT_CLAIM_STATUSES,
         ).count()
         >= settings.DAILY_CLAIM_LIMIT
@@ -195,7 +208,7 @@ def create_claim(
         raise PeonyAPIException(
             code="DAILY_LIMIT_REACHED",
             message=f"Daily limit reached ({settings.DAILY_CLAIM_LIMIT} per day)",
-            details={"resets_at": next_midnight_sgt().isoformat()},
+            details={"resets_at": next_midnight_in(receiver_tz).isoformat()},
             http_status=429,
         )
 
@@ -206,12 +219,12 @@ def create_claim(
             http_status=409,
         )
 
-    claimed_at = now_sgt()
+    claimed_at = now_in(restaurant_tz)
     claim = FoodClaim.objects.create(
         food=food,
         receiver=receiver,
         restaurant=food.restaurant,
-        claim_date=today_sgt(),
+        claim_date=today_in(restaurant_tz),
         claimed_at=claimed_at,
         receiver_lat=lat,
         receiver_lng=lng,
@@ -223,7 +236,7 @@ def create_claim(
 
     profile = receiver.receiver_profile
     profile.total_claims += 1
-    profile.last_claim_date = today_sgt()
+    profile.last_claim_date = today_in(receiver_tz)
     profile.save(update_fields=["total_claims", "last_claim_date"])
 
     _create_claim_notifications(claim)
@@ -280,6 +293,7 @@ def list_claim_history(receiver: User) -> dict:
 
     for claim in claims:
         has_review = claim.restaurant_id in reviewed_restaurant_ids
+        tz = timezone_for_restaurant(claim.restaurant)
         item = {
             "id": str(claim.id),
             "food_name": claim.food.name,
@@ -287,13 +301,18 @@ def list_claim_history(receiver: User) -> dict:
             "restaurant_name": claim.restaurant.name,
             "status": claim.status,
             "claimed_at": claim.claimed_at.isoformat(),
-            "pickup_window": format_pickup_window(claim.food.pickup_start, claim.food.pickup_end),
+            "pickup_window": format_pickup_window(
+                claim.food.pickup_start,
+                claim.food.pickup_end,
+                tz=tz,
+            ),
             "has_review": has_review,
             "can_review": claim.status == ClaimStatus.COLLECTED,
         }
         items.append(item)
 
-        week_start = (claim.claimed_at - timedelta(days=claim.claimed_at.weekday())).date()
+        local_claimed = claim.claimed_at.astimezone(tz)
+        week_start = (local_claimed - timedelta(days=local_claimed.weekday())).date()
         grouped[week_start.isoformat()].append(item)
 
     grouped_by_week = [
@@ -319,8 +338,9 @@ def get_receiver_stats(receiver: User) -> dict:
         .distinct()
         .count()
     )
-    member_since = receiver.created_at.astimezone(now_sgt().tzinfo).date()
-    days_active = max(1, (today_sgt() - member_since).days + 1)
+    tz = timezone_for_phone(receiver.phone_e164)
+    member_since = receiver.created_at.astimezone(tz).date()
+    days_active = max(1, (today_in(tz) - member_since).days + 1)
     return {
         "lifetime_meals": lifetime_meals,
         "restaurants_count": restaurants_count,

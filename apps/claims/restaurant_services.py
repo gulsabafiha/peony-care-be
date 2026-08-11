@@ -8,12 +8,12 @@ from apps.claims.models import FoodClaim
 from apps.common.choices import BOARD_CLAIM_STATUSES, ClaimStatus
 from apps.common.exceptions import PeonyAPIException
 from apps.common.timezone_utils import (
-    SGT,
     format_clock_time,
     format_pickup_window,
     format_pickup_window_short,
-    now_sgt,
-    today_sgt,
+    now_in,
+    timezone_for_restaurant,
+    today_in,
 )
 from apps.donations.models import FoodItem
 from apps.donations.restaurant_services import get_restaurant_profile
@@ -59,14 +59,15 @@ def _items_label(claim: FoodClaim) -> str:
 def _serialize_restaurant_claim(claim: FoodClaim) -> dict:
     status = claim.status
     receiver_name = claim.receiver.receiver_profile.display_name
+    tz = timezone_for_restaurant(claim.food.restaurant)
     collected_label = None
     if claim.collected_at:
-        collected_label = f"Collected {format_clock_time(claim.collected_at)}"
+        collected_label = f"Collected {format_clock_time(claim.collected_at, tz=tz)}"
 
     window_expired_label = None
     if status == ClaimStatus.NO_SHOW:
-        end = claim.food.pickup_end.astimezone(SGT)
-        window_expired_label = f"Window expired {format_clock_time(end)}"
+        end = claim.food.pickup_end.astimezone(tz)
+        window_expired_label = f"Window expired {format_clock_time(end, tz=tz)}"
 
     return {
         "id": str(claim.id),
@@ -84,10 +85,12 @@ def _serialize_restaurant_claim(claim: FoodClaim) -> dict:
         "pickup_window": format_pickup_window(
             claim.food.pickup_start,
             claim.food.pickup_end,
+            tz=tz,
         ),
         "pickup_window_short": format_pickup_window_short(
             claim.food.pickup_start,
             claim.food.pickup_end,
+            tz=tz,
         ),
         "status": status,
         "status_key": _claim_status_key(status),
@@ -138,9 +141,10 @@ def get_today_claims(user: User, status: str = "all") -> dict:
             http_status=400,
         )
 
+    today = today_in(timezone_for_restaurant(restaurant))
     base = FoodClaim.objects.filter(
         restaurant=restaurant,
-        claim_date=today_sgt(),
+        claim_date=today,
         status__in=BOARD_CLAIM_STATUSES,
     )
     counts = base.aggregate(
@@ -240,7 +244,7 @@ def mark_claim_collected(user: User, claim_id: str) -> dict:
         )
 
     claim.status = ClaimStatus.COLLECTED
-    claim.collected_at = now_sgt()
+    claim.collected_at = now_in(timezone_for_restaurant(claim.restaurant))
     claim.no_show_at = None
     claim.save(update_fields=["status", "collected_at", "no_show_at"])
     return _serialize_restaurant_claim(claim)
@@ -265,7 +269,7 @@ def mark_claim_no_show(user: User, claim_id: str) -> dict:
         )
 
     claim.status = ClaimStatus.NO_SHOW
-    claim.no_show_at = now_sgt()
+    claim.no_show_at = now_in(timezone_for_restaurant(claim.restaurant))
     claim.collected_at = None
     claim.save(update_fields=["status", "no_show_at", "collected_at"])
     return _serialize_restaurant_claim(claim)

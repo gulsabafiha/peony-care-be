@@ -113,6 +113,7 @@ class TestRestaurantDonations:
         assert data["restaurant"]["name"] == "Tian Tian Hainanese"
         assert "receivers within" in data["estimated_reach_label"]
         assert isinstance(data["estimated_reach"], int)
+        assert data["pickup_start"].endswith("+08:00")
 
         list_response = client.get(
             reverse("restaurant_donations:restaurant-donations"),
@@ -125,6 +126,46 @@ class TestRestaurantDonations:
         assert payload["summary"]["inactive_count"] == 0
         assert len(payload["groups"]) == 1
         assert len(payload["groups"][0]["items"]) == 1
+
+    def test_bangladesh_donation_uses_dhaka_timezone(self, api_client):
+        user = User.objects.create_user(
+            phone_e164="+8801712345678",
+            role=UserRole.RESTAURANT,
+            is_active=True,
+        )
+        RestaurantProfile.objects.create(
+            user=user,
+            name="Tay tay",
+            uen="BD-1205-A",
+            address="28 Kallyanpur Road Number 3, Dhaka",
+            postal_code="1205",
+            latitude=23.8103,
+            longitude=90.4125,
+            contact_name="Manager",
+            contact_email="contact@restaurant.bd",
+            is_approved=True,
+        )
+        client = auth_client(api_client, user)
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "string",
+                "description": "fadsfdsfsd",
+                "category": "SNACKS",
+                "quantity": 1,
+                "unit": "packs",
+                "pickup_start": "2026-08-11T19:08:11.945Z",
+                "pickup_end": "2026-08-12T19:08:11.945Z",
+                "schedule": "one-time",
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["pickup_start"] == "2026-08-12T01:08:11.945000+06:00"
+        assert data["pickup_end"] == "2026-08-13T01:08:11.945000+06:00"
+        assert "+08:00" not in data["pickup_start"]
+        assert "1:08 AM" in data["pickup_window"]
 
     def test_create_donation_with_photo(self, api_client, restaurant_user):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -807,3 +848,143 @@ class TestRestaurantAccount:
             format="json",
         )
         assert response.status_code == 400
+
+
+class TestRecurringDonationRepost:
+    def _create_daily(self, restaurant_user, *, days_ago: int = 1, schedule="every_day", days=None):
+        from apps.common.timezone_utils import timezone_for_restaurant, now_in
+        from apps.donations.models import FoodItem
+        from apps.common.choices import FoodCategory, FoodStatus, ListStatus, RecurrenceType
+
+        restaurant = restaurant_user.restaurant_profile
+        tz = timezone_for_restaurant(restaurant)
+        now = now_in(tz)
+        day = (now - timedelta(days=days_ago)).date()
+        pickup_start = now.replace(
+            year=day.year, month=day.month, day=day.day, hour=10, minute=0, second=0, microsecond=0
+        )
+        pickup_end = pickup_start + timedelta(hours=3)
+
+        recurrence_type = RecurrenceType.DAILY
+        recurrence_days = list(range(7))
+        if schedule == "custom_days":
+            recurrence_type = RecurrenceType.CUSTOM
+            recurrence_days = days or [0, 1, 2, 3, 4, 5, 6]
+
+        food = FoodItem.objects.create(
+            restaurant=restaurant,
+            name="Daily Soup",
+            description="Recurring",
+            category=FoodCategory.OTHER,
+            unit="packs",
+            quantity_original=5,
+            quantity_available=5,
+            quantity_claimed=0,
+            status=FoodStatus.AVAILABLE,
+            list_status=ListStatus.ACTIVE,
+            pickup_start=pickup_start,
+            pickup_end=pickup_end,
+            recurrence_type=recurrence_type,
+            recurrence_days=recurrence_days,
+        )
+        food.recurrence_series_id = food.id
+        food.food_qr_data = f"{food.id}|{restaurant.id}|1"
+        food.save(update_fields=["recurrence_series_id", "food_qr_data", "updated_at"])
+        return food
+
+    def test_daily_auto_posts_for_today(self, restaurant_user):
+        from apps.common.timezone_utils import timezone_for_restaurant, today_in
+        from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+        template = self._create_daily(restaurant_user, days_ago=1)
+        restaurant = restaurant_user.restaurant_profile
+        tz = timezone_for_restaurant(restaurant)
+        today = today_in(tz)
+
+        created = ensure_recurring_donations_posted(restaurant=restaurant)
+        assert len(created) == 1
+        assert created[0].recurrence_series_id == template.recurrence_series_id
+        assert created[0].pickup_start.astimezone(tz).date() == today
+        assert created[0].quantity_available == 5
+        assert created[0].id != template.id
+
+        # Idempotent — second run does not duplicate.
+        again = ensure_recurring_donations_posted(restaurant=restaurant)
+        assert again == []
+        assert (
+            FoodItem.objects.filter(recurrence_series_id=template.recurrence_series_id).count() == 2
+        )
+
+    def test_custom_days_skips_off_days(self, restaurant_user):
+        from apps.common.timezone_utils import timezone_for_restaurant, today_in
+        from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+        restaurant = restaurant_user.restaurant_profile
+        tz = timezone_for_restaurant(restaurant)
+        today = today_in(tz)
+        # Pick a weekday that is NOT today.
+        off_day = (today.weekday() + 1) % 7
+        self._create_daily(
+            restaurant_user,
+            days_ago=1,
+            schedule="custom_days",
+            days=[off_day],
+        )
+
+        created = ensure_recurring_donations_posted(restaurant=restaurant)
+        assert created == []
+
+    def test_custom_days_posts_on_matching_day(self, restaurant_user):
+        from apps.common.timezone_utils import timezone_for_restaurant, today_in
+        from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+        restaurant = restaurant_user.restaurant_profile
+        tz = timezone_for_restaurant(restaurant)
+        today = today_in(tz)
+        self._create_daily(
+            restaurant_user,
+            days_ago=1,
+            schedule="custom_days",
+            days=[today.weekday()],
+        )
+
+        created = ensure_recurring_donations_posted(restaurant=restaurant)
+        assert len(created) == 1
+
+    def test_manual_pause_stops_series(self, restaurant_user):
+        from apps.common.choices import ClosedReason
+        from apps.common.timezone_utils import now_in, timezone_for_restaurant
+        from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+        template = self._create_daily(restaurant_user, days_ago=1)
+        restaurant = restaurant_user.restaurant_profile
+        tz = timezone_for_restaurant(restaurant)
+        template.list_status = ListStatus.INACTIVE
+        template.closed_at = now_in(tz)
+        template.closed_reason = ClosedReason.MANUAL
+        template.save(update_fields=["list_status", "closed_at", "closed_reason", "updated_at"])
+
+        created = ensure_recurring_donations_posted(restaurant=restaurant)
+        assert created == []
+
+    def test_create_donation_sets_series_id(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        now = timezone.now()
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Every Day Rice",
+                "category": "RICE",
+                "quantity": 4,
+                "pickup_start": now.isoformat(),
+                "pickup_end": (now + timedelta(hours=2)).isoformat(),
+                "schedule": "every_day",
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        food_id = response.json()["data"]["id"]
+        food = FoodItem.objects.get(id=food_id)
+        assert food.recurrence_type == "DAILY"
+        assert food.recurrence_days == [0, 1, 2, 3, 4, 5, 6]
+        assert str(food.recurrence_series_id) == food_id

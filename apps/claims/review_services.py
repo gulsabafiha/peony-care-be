@@ -9,7 +9,7 @@ from apps.accounts.models import RestaurantProfile, User
 from apps.claims.models import FoodClaim, RestaurantReview, ReviewTagOption
 from apps.common.choices import ClaimStatus
 from apps.common.exceptions import PeonyAPIException
-from apps.common.timezone_utils import SGT, today_sgt
+from apps.common.timezone_utils import SGT, today_in, timezone_for_restaurant
 
 REVIEW_TAGS = [
     ("friendly-staff", "Friendly staff", 1),
@@ -69,11 +69,11 @@ def restaurant_rating_stats(restaurant_id) -> dict:
     }
 
 
-def _collected_label(collected_at) -> str:
+def _collected_label(collected_at, *, tz=SGT) -> str:
     if not collected_at:
         return "collected"
-    day = collected_at.astimezone(SGT).date()
-    today = today_sgt()
+    day = collected_at.astimezone(tz).date()
+    today = today_in(tz)
     if day == today:
         return "collected today"
     if day == today - timedelta(days=1):
@@ -196,7 +196,10 @@ def get_review_form(receiver: User, restaurant_id: str) -> dict:
     restaurant = _get_restaurant(restaurant_id)
     latest_claim = _require_can_review(receiver, restaurant)
     review = _get_review(receiver, restaurant)
-    collected = _collected_label(latest_claim.collected_at)
+    collected = _collected_label(
+        latest_claim.collected_at,
+        tz=timezone_for_restaurant(restaurant),
+    )
     food_name = latest_claim.food.name
     return {
         "restaurant_id": str(restaurant.id),

@@ -16,11 +16,11 @@ from apps.common.choices import (
 )
 from apps.common.exceptions import PeonyAPIException
 from apps.common.timezone_utils import (
-    SGT,
     WEEKDAY_LABELS,
-    now_sgt,
-    start_of_week_sgt,
-    today_sgt,
+    now_in,
+    start_of_week_in,
+    timezone_for_restaurant,
+    today_in,
 )
 from apps.donations.models import FoodItem
 from apps.donations.restaurant_services import get_restaurant_profile
@@ -46,7 +46,7 @@ def _initials(name: str) -> str:
     return "".join(part[0].upper() for part in parts[:2])
 
 
-def _parse_range(range_key: str) -> tuple[str, date | None, date]:
+def _parse_range(range_key: str, *, tz) -> tuple[str, date | None, date]:
     key = (range_key or "30D").upper()
     if key not in RANGE_OPTIONS:
         raise PeonyAPIException(
@@ -54,7 +54,7 @@ def _parse_range(range_key: str) -> tuple[str, date | None, date]:
             message="range must be one of 7D, 30D, 3M, 1Y, ALL.",
             http_status=400,
         )
-    end = today_sgt() + timedelta(days=1)  # exclusive
+    end = today_in(tz) + timedelta(days=1)  # exclusive
     if key == "ALL":
         return key, None, end
     days = {"7D": 7, "30D": 30, "3M": 90, "1Y": 365}[key]
@@ -62,10 +62,10 @@ def _parse_range(range_key: str) -> tuple[str, date | None, date]:
     return key, start, end
 
 
-def _datetime_start(day: date | None) -> datetime | None:
+def _datetime_start(day: date | None, *, tz) -> datetime | None:
     if day is None:
         return None
-    return datetime.combine(day, datetime.min.time(), tzinfo=SGT)
+    return datetime.combine(day, datetime.min.time(), tzinfo=tz)
 
 
 def _week_over_week_pct(this_week: int, last_week: int) -> int:
@@ -90,10 +90,11 @@ def _weekly_buckets(
     start: date | None,
     end: date,
     *,
+    tz,
     max_weeks: int = 12,
 ) -> list[dict]:
     """Build weekly meal + claim-rate points for charts."""
-    end_week = start_of_week_sgt(end - timedelta(days=1))
+    end_week = start_of_week_in(end - timedelta(days=1), tz=tz)
     if start is None:
         first_claim = (
             FoodClaim.objects.filter(
@@ -112,11 +113,11 @@ def _weekly_buckets(
         )
         earliest = first_claim
         if first_food is not None:
-            food_day = first_food.astimezone(SGT).date()
+            food_day = first_food.astimezone(tz).date()
             earliest = food_day if earliest is None else min(earliest, food_day)
-        week_start = start_of_week_sgt(earliest or today_sgt())
+        week_start = start_of_week_in(earliest or today_in(tz), tz=tz)
     else:
-        week_start = start_of_week_sgt(start)
+        week_start = start_of_week_in(start, tz=tz)
 
     # Cap number of weeks for chart readability.
     span_weeks = max(((end_week - week_start).days // 7) + 1, 1)
@@ -133,19 +134,19 @@ def _weekly_buckets(
 
     meals_by_week: dict[str, int] = defaultdict(int)
     for row in claims:
-        key = start_of_week_sgt(row["claim_date"]).isoformat()
+        key = start_of_week_in(row["claim_date"], tz=tz).isoformat()
         meals_by_week[key] += row["quantity_claimed"] or 0
 
     foods = FoodItem.objects.filter(
         restaurant=restaurant,
-        created_at__gte=_datetime_start(week_start),
-        created_at__lt=_datetime_start(end),
+        created_at__gte=_datetime_start(week_start, tz=tz),
+        created_at__lt=_datetime_start(end, tz=tz),
     ).values("created_at", "quantity_original", "quantity_claimed")
 
     offered_by_week: dict[str, int] = defaultdict(int)
     claimed_by_week: dict[str, int] = defaultdict(int)
     for food in foods:
-        key = start_of_week_sgt(food["created_at"].astimezone(SGT).date()).isoformat()
+        key = start_of_week_in(food["created_at"].astimezone(tz).date(), tz=tz).isoformat()
         offered_by_week[key] += food["quantity_original"] or 0
         claimed_by_week[key] += food["quantity_claimed"] or 0
 
@@ -169,10 +170,10 @@ def _weekly_buckets(
     return rows
 
 
-def _donation_source(restaurant, start: date | None, end: date) -> dict:
-    foods = FoodItem.objects.filter(restaurant=restaurant, created_at__lt=_datetime_start(end))
+def _donation_source(restaurant, start: date | None, end: date, *, tz) -> dict:
+    foods = FoodItem.objects.filter(restaurant=restaurant, created_at__lt=_datetime_start(end, tz=tz))
     if start is not None:
-        foods = foods.filter(created_at__gte=_datetime_start(start))
+        foods = foods.filter(created_at__gte=_datetime_start(start, tz=tz))
 
     totals = foods.aggregate(
         total=Count("id"),
@@ -209,9 +210,9 @@ def _donation_source(restaurant, start: date | None, end: date) -> dict:
     }
 
 
-def _claim_heatmap(restaurant) -> dict:
-    end = today_sgt() + timedelta(days=1)
-    start = start_of_week_sgt(today_sgt()) - timedelta(days=7 * (HEATMAP_WEEKS - 1))
+def _claim_heatmap(restaurant, *, tz) -> dict:
+    end = today_in(tz) + timedelta(days=1)
+    start = start_of_week_in(today_in(tz), tz=tz) - timedelta(days=7 * (HEATMAP_WEEKS - 1))
 
     claims = FoodClaim.objects.filter(
         restaurant=restaurant,
@@ -227,7 +228,7 @@ def _claim_heatmap(restaurant) -> dict:
 
     max_value = 0
     for row in claims:
-        ws = start_of_week_sgt(row["claim_date"])
+        ws = start_of_week_in(row["claim_date"], tz=tz)
         key = ws.isoformat()
         if key not in grid:
             continue
@@ -272,14 +273,15 @@ def _most_claimed_dishes(
     start: date | None,
     end: date,
     *,
+    tz,
     limit: int = 3,
 ) -> list[dict]:
     foods = FoodItem.objects.filter(
         restaurant=restaurant,
-        created_at__lt=_datetime_start(end),
+        created_at__lt=_datetime_start(end, tz=tz),
     )
     if start is not None:
-        foods = foods.filter(created_at__gte=_datetime_start(start))
+        foods = foods.filter(created_at__gte=_datetime_start(start, tz=tz))
 
     # Aggregate by dish name across listings in range.
     by_name: dict[str, dict] = {}
@@ -320,18 +322,18 @@ def _most_claimed_dishes(
     return dishes[:limit]
 
 
-def _sponsors(restaurant, start: date | None, end: date, *, limit: int = 5) -> list[dict]:
+def _sponsors(restaurant, start: date | None, end: date, *, tz, limit: int = 5) -> list[dict]:
     orders = (
         MealOrder.objects.filter(
             restaurant=restaurant,
             status=MealOrderStatus.POSTED,
-            created_at__lt=_datetime_start(end),
+            created_at__lt=_datetime_start(end, tz=tz),
         )
         .select_related("donor", "food_item")
         .prefetch_related("items")
     )
     if start is not None:
-        orders = orders.filter(created_at__gte=_datetime_start(start))
+        orders = orders.filter(created_at__gte=_datetime_start(start, tz=tz))
 
     named: dict[str, dict] = {}
     anonymous = {
@@ -403,22 +405,23 @@ def _sponsors(restaurant, start: date | None, end: date, *, limit: int = 5) -> l
 
 def get_restaurant_analytics(user: User, range_key: str = "30D") -> dict:
     restaurant = get_restaurant_profile(user)
-    selected_range, start, end = _parse_range(range_key)
+    tz = timezone_for_restaurant(restaurant)
+    selected_range, start, end = _parse_range(range_key, tz=tz)
 
     all_foods = FoodItem.objects.filter(restaurant=restaurant)
     donations_all_time = all_foods.count()
     is_empty = donations_all_time == 0
 
-    foods_in_range = all_foods.filter(created_at__lt=_datetime_start(end))
+    foods_in_range = all_foods.filter(created_at__lt=_datetime_start(end, tz=tz))
     if start is not None:
-        foods_in_range = foods_in_range.filter(created_at__gte=_datetime_start(start))
+        foods_in_range = foods_in_range.filter(created_at__gte=_datetime_start(start, tz=tz))
 
     donations_posted = foods_in_range.count()
     total_original = foods_in_range.aggregate(total=Sum("quantity_original"))["total"] or 0
     people_fed = _meals_in_period(restaurant, start, end)
     claim_rate_pct = round((people_fed / total_original) * 100) if total_original else None
 
-    week_start = start_of_week_sgt(today_sgt())
+    week_start = start_of_week_in(today_in(tz), tz=tz)
     this_week_meals = _meals_in_period(
         restaurant,
         week_start,
@@ -431,25 +434,25 @@ def get_restaurant_analytics(user: User, range_key: str = "30D") -> dict:
     )
     week_over_week_pct = _week_over_week_pct(this_week_meals, last_week_meals)
 
-    weekly = _weekly_buckets(restaurant, start, end)
+    weekly = _weekly_buckets(restaurant, start, end, tz=tz)
     meals_total = sum(row["meals"] for row in weekly)
     latest_rate = weekly[-1]["claim_rate_pct"] if weekly else (claim_rate_pct or 0)
 
     sponsored_total = MealOrder.objects.filter(
         restaurant=restaurant,
         status=MealOrderStatus.POSTED,
-        created_at__lt=_datetime_start(end),
+        created_at__lt=_datetime_start(end, tz=tz),
     )
     if start is not None:
-        sponsored_total = sponsored_total.filter(created_at__gte=_datetime_start(start))
+        sponsored_total = sponsored_total.filter(created_at__gte=_datetime_start(start, tz=tz))
     sponsored_amount = sponsored_total.aggregate(total=Sum("total_amount_sgd"))["total"] or Decimal(
         "0.00"
     )
 
-    source = _donation_source(restaurant, start, end)
-    heatmap = _claim_heatmap(restaurant)
-    top_dishes = _most_claimed_dishes(restaurant, start, end)
-    sponsors = _sponsors(restaurant, start, end)
+    source = _donation_source(restaurant, start, end, tz=tz)
+    heatmap = _claim_heatmap(restaurant, tz=tz)
+    top_dishes = _most_claimed_dishes(restaurant, start, end, tz=tz)
+    sponsors = _sponsors(restaurant, start, end, tz=tz)
 
     return {
         "is_empty": is_empty,
@@ -553,6 +556,6 @@ def get_restaurant_analytics(user: User, range_key: str = "30D") -> dict:
         },
         "insights": {
             "week_over_week_pct": week_over_week_pct,
-            "generated_at": now_sgt().isoformat(),
+            "generated_at": now_in(tz).isoformat(),
         },
     }

@@ -3,7 +3,7 @@ from __future__ import annotations
 from apps.accounts.models import User
 from apps.claims.models import ClaimReport, ClaimReportReasonOption, FoodClaim
 from apps.common.exceptions import PeonyAPIException
-from apps.common.timezone_utils import format_pickup_window_short
+from apps.common.timezone_utils import format_pickup_window_short, timezone_for_restaurant
 from apps.donations.restaurant_services import get_restaurant_profile
 
 CLAIM_REPORT_REASONS = [
@@ -62,7 +62,11 @@ def get_claim_report_context(user: User, claim_id: str) -> dict:
     claim = _get_restaurant_claim(user, claim_id)
     receiver = claim.receiver.receiver_profile
     phone_tail = _mask_phone_tail(claim.receiver.phone_e164)
-    pickup = format_pickup_window_short(claim.food.pickup_start, claim.food.pickup_end)
+    pickup = format_pickup_window_short(
+        claim.food.pickup_start,
+        claim.food.pickup_end,
+        tz=timezone_for_restaurant(claim.restaurant),
+    )
     context_line = (
         f"Reporting {receiver.display_name} (mobile — {phone_tail} · "
         f"{claim.food.name}, {pickup} pickup). Your report is confidential."
