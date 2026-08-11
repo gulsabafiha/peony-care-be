@@ -116,7 +116,7 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
 }
 
-# UduFood business config
+# Udufood business config
 MAX_CLAIM_DISTANCE_M = config("MAX_CLAIM_DISTANCE_M", default=500, cast=int)
 DAILY_CLAIM_LIMIT = config("DAILY_CLAIM_LIMIT", default=1, cast=int)
 DEFAULT_BROWSE_RADIUS_KM = config("DEFAULT_BROWSE_RADIUS_KM", default=5, cast=int)
@@ -153,7 +153,7 @@ REGISTRATION_TOKEN_MAX_AGE_SECONDS = config(
 
 # PayNow (money donations)
 PAYNOW_UEN = config("PAYNOW_UEN", default="")
-PAYNOW_ACCOUNT_NAME = config("PAYNOW_ACCOUNT_NAME", default="UduFood Ltd")
+PAYNOW_ACCOUNT_NAME = config("PAYNOW_ACCOUNT_NAME", default="Udufood Ltd")
 
 # Email (console backend by default — configure SMTP in production)
 EMAIL_BACKEND = config(
@@ -203,8 +203,8 @@ LOGGING = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "UduFood API",
-    "DESCRIPTION": "Backend API for the UduFood food-share application.",
+    "TITLE": "Udufood API",
+    "DESCRIPTION": "Backend API for the Udufood food-share application.",
     "VERSION": "1.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,

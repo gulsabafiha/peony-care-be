@@ -93,7 +93,7 @@ class Command(BaseCommand):
         profile, created = RestaurantProfile.objects.get_or_create(
             user=user,
             defaults={
-                "name": "UduFood Demo Kitchen",
+                "name": "Udufood Demo Kitchen",
                 "uen": "T00SS0001A",
                 "address": "1 Fullerton Road, Singapore 049213",
                 "postal_code": "049213",

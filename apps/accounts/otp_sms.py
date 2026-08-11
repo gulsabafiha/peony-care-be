@@ -215,7 +215,7 @@ def _friendly_twilio_send_message(twilio_msg: str) -> str:
 def _send_via_sns(phone_e164: str, purpose: str, code: str) -> None:
     region = settings.AWS_S3_REGION_NAME or "ap-southeast-1"
     message = (
-        f"Your UduFood code is {code}. "
+        f"Your Udufood code is {code}. "
         f"It expires in {settings.OTP_EXPIRY_MINUTES} minute(s)."
     )
 

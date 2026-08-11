@@ -5,7 +5,7 @@ STANDARD_ERROR_RESPONSE_REF = "#/components/schemas/StandardErrorEnvelope"
 
 
 def enveloped_schema(data_serializer, envelope_name: str, *alt_serializers, many: bool = False):
-    """Wrap a response serializer in the UduFood API envelope for OpenAPI."""
+    """Wrap a response serializer in the Udufood API envelope for OpenAPI."""
     data_types = [data_serializer, *alt_serializers]
     if len(data_types) > 1:
         data_field = PolymorphicProxySerializer(
@@ -32,7 +32,7 @@ def enveloped_schema(data_serializer, envelope_name: str, *alt_serializers, many
 
 
 def add_standard_error_response(result, generator, request, public):
-    """Document the shared UduFood error envelope on every OpenAPI operation."""
+    """Document the shared Udufood error envelope on every OpenAPI operation."""
     schemas = result.setdefault("components", {}).setdefault("schemas", {})
     schemas.setdefault(
         "StandardErrorDetail",
