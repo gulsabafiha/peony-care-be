@@ -57,14 +57,9 @@ def build_receiver_data_export(user: User) -> dict:
     if settings_obj:
         notification_settings = {
             "push_enabled": settings_obj.push_enabled,
-            "email_enabled": settings_obj.email_enabled,
-            "alert_new_claim": settings_obj.alert_new_claim,
-            "alert_sponsored": settings_obj.alert_sponsored,
-            "alert_all_claimed": settings_obj.alert_all_claimed,
-            "alert_window_expiring": settings_obj.alert_window_expiring,
-            "alert_no_show": settings_obj.alert_no_show,
-            "alert_donation_claimed": settings_obj.alert_donation_claimed,
-            "alert_receipts": settings_obj.alert_receipts,
+            "alert_new_food_nearby": settings_obj.alert_new_food_nearby,
+            "alert_claim_confirmations": settings_obj.alert_claim_confirmations,
+            "alert_daily_limit_reset": settings_obj.alert_daily_limit_reset,
         }
 
     return {

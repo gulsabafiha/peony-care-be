@@ -115,17 +115,20 @@ def _update_food_after_claim(food: FoodItem) -> None:
 
 
 def _create_claim_notifications(claim: FoodClaim) -> None:
+    from apps.notifications.settings_services import receiver_allows_alert
+
     receiver = claim.receiver
     restaurant_user = claim.restaurant.user
     food = claim.food
 
-    Notification.objects.create(
-        user=receiver,
-        type="CLAIM_CONFIRMED",
-        title="Meal claimed!",
-        body=f"You claimed {food.name} from {claim.restaurant.name}.",
-        payload={"claim_id": str(claim.id), "food_id": str(food.id)},
-    )
+    if receiver_allows_alert(receiver, "alert_claim_confirmations"):
+        Notification.objects.create(
+            user=receiver,
+            type="CLAIM_CONFIRMED",
+            title="Meal claimed!",
+            body=f"You claimed {food.name} from {claim.restaurant.name}.",
+            payload={"claim_id": str(claim.id), "food_id": str(food.id)},
+        )
     Notification.objects.create(
         user=restaurant_user,
         type="FOOD_CLAIMED",

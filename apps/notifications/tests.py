@@ -141,3 +141,48 @@ class TestNotificationInbox:
         )
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "NOTIFICATION_NOT_FOUND"
+
+
+class TestReceiverNotificationSettings:
+    def test_get_and_patch_settings(self, api_client, receiver_user):
+        client = auth_client(api_client, receiver_user)
+        url = reverse("receiver_accounts:receiver-notification-settings")
+
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["push_enabled"] is True
+        assert data["alert_new_food_nearby"] is True
+        assert data["alert_claim_confirmations"] is True
+        assert data["alert_daily_limit_reset"] is True
+        assert "email_enabled" not in data
+        assert "alert_new_claim" not in data
+
+        response = client.patch(
+            url,
+            {
+                "push_enabled": False,
+                "alert_new_food_nearby": False,
+                "alert_daily_limit_reset": False,
+            },
+            format="json",
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["push_enabled"] is False
+        assert data["alert_new_food_nearby"] is False
+        assert data["alert_daily_limit_reset"] is False
+        assert data["alert_claim_confirmations"] is True
+
+    def test_restaurant_forbidden(self, api_client):
+        restaurant = User.objects.create_user(
+            phone_e164="+6592000099",
+            role=UserRole.RESTAURANT,
+            is_active=True,
+        )
+        client = auth_client(api_client, restaurant)
+        response = client.get(
+            reverse("receiver_accounts:receiver-notification-settings")
+        )
+        assert response.status_code == 403
+

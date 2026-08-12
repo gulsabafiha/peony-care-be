@@ -38,6 +38,7 @@ class NotificationSettings(models.Model):
     )
     push_enabled = models.BooleanField(default=True)
     email_enabled = models.BooleanField(default=False)
+    # Restaurant / donor-oriented alerts
     alert_new_claim = models.BooleanField(default=True)
     alert_sponsored = models.BooleanField(default=True)
     alert_all_claimed = models.BooleanField(default=True)
@@ -45,6 +46,10 @@ class NotificationSettings(models.Model):
     alert_no_show = models.BooleanField(default=True)
     alert_donation_claimed = models.BooleanField(default=True)
     alert_receipts = models.BooleanField(default=True)
+    # Receiver-oriented alerts
+    alert_new_food_nearby = models.BooleanField(default=True)
+    alert_claim_confirmations = models.BooleanField(default=True)
+    alert_daily_limit_reset = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

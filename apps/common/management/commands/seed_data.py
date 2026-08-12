@@ -570,6 +570,9 @@ class Command(BaseCommand):
                 "alert_all_claimed": True,
                 "alert_window_expiring": True,
                 "alert_no_show": True,
+                "alert_new_food_nearby": True,
+                "alert_claim_confirmations": True,
+                "alert_daily_limit_reset": True,
             },
         )
 

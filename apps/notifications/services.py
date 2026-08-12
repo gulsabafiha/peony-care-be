@@ -133,20 +133,36 @@ def notify_nearby_receivers_of_new_food(
     if not nearby_receivers:
         return 0
 
-    notifications = [
-        Notification(
-            user=receiver.user,
-            type="NEW_FOOD_NEARBY",
-            title=f"{food.name} near you!",
-            body=f"{restaurant.name} just posted it nearby.",
-            payload={
-                "food_id": str(food.id),
-                "restaurant_id": str(restaurant.id),
-                "food_name": food.name,
-                "distance_km": round(distance_m / 1000, 1),
-            },
+    from apps.notifications.models import NotificationSettings
+
+    user_ids = [receiver.user_id for receiver, _ in nearby_receivers]
+    settings_by_user = {
+        settings_obj.user_id: settings_obj
+        for settings_obj in NotificationSettings.objects.filter(user_id__in=user_ids)
+    }
+
+    notifications = []
+    for receiver, distance_m in nearby_receivers:
+        settings_obj = settings_by_user.get(receiver.user_id)
+        if settings_obj is not None:
+            if not settings_obj.push_enabled or not settings_obj.alert_new_food_nearby:
+                continue
+        # No settings row yet → defaults allow alerts
+        notifications.append(
+            Notification(
+                user=receiver.user,
+                type="NEW_FOOD_NEARBY",
+                title=f"{food.name} near you!",
+                body=f"{restaurant.name} just posted it nearby.",
+                payload={
+                    "food_id": str(food.id),
+                    "restaurant_id": str(restaurant.id),
+                    "food_name": food.name,
+                    "distance_km": round(distance_m / 1000, 1),
+                },
+            )
         )
-        for receiver, distance_m in nearby_receivers
-    ]
+    if not notifications:
+        return 0
     Notification.objects.bulk_create(notifications)
     return len(notifications)

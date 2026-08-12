@@ -10,10 +10,16 @@ from apps.accounts.receiver_account_views import (
     RequestDataExportView,
 )
 from apps.accounts.receiver_views import ReceiverProfileView, ReceiverStatsView
+from apps.notifications.views import ReceiverNotificationSettingsView
 
 urlpatterns = [
     path("profile/", ReceiverProfileView.as_view(), name="receiver-profile"),
     path("stats/", ReceiverStatsView.as_view(), name="receiver-stats"),
+    path(
+        "notifications/settings/",
+        ReceiverNotificationSettingsView.as_view(),
+        name="receiver-notification-settings",
+    ),
     path("settings/location/", ReceiverLocationSettingsView.as_view(), name="receiver-location-settings"),
     path(
         "settings/location/history/",

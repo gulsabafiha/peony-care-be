@@ -67,3 +67,18 @@ class NotificationSettingsUpdateSerializer(serializers.Serializer):
     alert_no_show = serializers.BooleanField(required=False)
     alert_donation_claimed = serializers.BooleanField(required=False)
     alert_receipts = serializers.BooleanField(required=False)
+
+
+class ReceiverNotificationSettingsSerializer(serializers.Serializer):
+    push_enabled = serializers.BooleanField()
+    alert_new_food_nearby = serializers.BooleanField()
+    alert_claim_confirmations = serializers.BooleanField()
+    alert_daily_limit_reset = serializers.BooleanField()
+    updated_at = serializers.DateTimeField()
+
+
+class ReceiverNotificationSettingsUpdateSerializer(serializers.Serializer):
+    push_enabled = serializers.BooleanField(required=False)
+    alert_new_food_nearby = serializers.BooleanField(required=False)
+    alert_claim_confirmations = serializers.BooleanField(required=False)
+    alert_daily_limit_reset = serializers.BooleanField(required=False)

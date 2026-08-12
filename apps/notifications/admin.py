@@ -22,9 +22,19 @@ class NotificationSettingsAdmin(admin.ModelAdmin):
         "alert_new_claim",
         "alert_sponsored",
         "alert_no_show",
+        "alert_new_food_nearby",
+        "alert_claim_confirmations",
+        "alert_daily_limit_reset",
         "updated_at",
     )
-    list_filter = ("push_enabled", "email_enabled", "alert_no_show")
+    list_filter = (
+        "push_enabled",
+        "email_enabled",
+        "alert_no_show",
+        "alert_new_food_nearby",
+        "alert_claim_confirmations",
+        "alert_daily_limit_reset",
+    )
     search_fields = ("user__phone_e164",)
     readonly_fields = ("id", "updated_at")
     autocomplete_fields = ("user",)

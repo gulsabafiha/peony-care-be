@@ -3,7 +3,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import IsAuthenticated
 
 from apps.common.exceptions import success_response
-from apps.common.permissions import IsRestaurant
+from apps.common.permissions import IsReceiver, IsRestaurant
 from apps.common.schema import enveloped_schema
 from apps.notifications import services, settings_services
 from apps.notifications.serializers import (
@@ -12,6 +12,8 @@ from apps.notifications.serializers import (
     NotificationListSerializer,
     NotificationSettingsSerializer,
     NotificationSettingsUpdateSerializer,
+    ReceiverNotificationSettingsSerializer,
+    ReceiverNotificationSettingsUpdateSerializer,
     UnreadCountSerializer,
 )
 
@@ -139,6 +141,48 @@ class RestaurantNotificationSettingsView(GenericAPIView):
         serializer = NotificationSettingsUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         data = settings_services.update_restaurant_notification_settings(
+            request.user,
+            serializer.validated_data,
+        )
+        return success_response(data, message="Notification settings saved.")
+
+
+class ReceiverNotificationSettingsView(GenericAPIView):
+    permission_classes = [IsReceiver]
+
+    @extend_schema(
+        tags=["Receiver"],
+        summary="Receiver notification settings",
+        responses={
+            200: enveloped_schema(
+                ReceiverNotificationSettingsSerializer,
+                "ReceiverNotificationSettingsEnvelope",
+            )
+        },
+    )
+    def get(self, request):
+        return success_response(
+            settings_services.get_receiver_notification_settings(request.user)
+        )
+
+    @extend_schema(
+        tags=["Receiver"],
+        summary="Update receiver notification settings",
+        request=ReceiverNotificationSettingsUpdateSerializer,
+        responses={
+            200: enveloped_schema(
+                ReceiverNotificationSettingsSerializer,
+                "ReceiverNotificationSettingsUpdateEnvelope",
+            )
+        },
+    )
+    def patch(self, request):
+        serializer = ReceiverNotificationSettingsUpdateSerializer(
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        data = settings_services.update_receiver_notification_settings(
             request.user,
             serializer.validated_data,
         )
