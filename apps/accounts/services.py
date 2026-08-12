@@ -172,6 +172,11 @@ def verify_otp(phone: str, code: str) -> dict:
         challenge_qs = challenge_qs.filter(expires_at__gt=timezone.now())
     challenge = challenge_qs.order_by("-created_at").first()
 
+    # Play Store / dev bypass: accept fixed OTP even if the challenge expired,
+    # was already consumed, or send was skipped.
+    if challenge is None and skip_strict_checks:
+        challenge = _ensure_bypass_challenge(phone_e164, code)
+
     if challenge is None:
         raise PeonyAPIException(
             code="OTP_EXPIRED",
@@ -229,6 +234,22 @@ def verify_otp(phone: str, code: str) -> dict:
         "phone": phone_e164,
         "message": "Phone verified. Complete registration to continue.",
     }
+
+
+def _ensure_bypass_challenge(phone_e164: str, code: str) -> OtpChallenge:
+    """Create a short-lived challenge for review/dev fixed OTP when none exists."""
+    user = find_user_by_phone(phone_e164)
+    purpose = (
+        OtpPurpose.LOGIN
+        if user is not None and user.is_active
+        else OtpPurpose.REGISTER
+    )
+    return OtpChallenge.objects.create(
+        phone_e164=phone_e164,
+        code_hash=_hash_value(code),
+        purpose=purpose,
+        expires_at=timezone.now() + timedelta(minutes=settings.OTP_EXPIRY_MINUTES),
+    )
 
 
 def _user_has_any_profile(user: User) -> bool:

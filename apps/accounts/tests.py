@@ -257,6 +257,45 @@ class TestPlayStoreReviewOtp:
         assert verify.status_code == 200
         assert "access" in verify.json()["data"]
 
+    def test_demo_phone_6590000001_accepts_1234_even_if_expired(
+        self, api_client, settings
+    ):
+        """Play Store demo number used in the app must accept fixed OTP 1234."""
+        demo_phone = "+6590000001"
+        settings.PLAY_STORE_REVIEW_PHONES = (
+            "+6590000001,+6599990001,+6599990002"
+        )
+        settings.PLAY_STORE_REVIEW_OTP = "1234"
+
+        from apps.accounts.models import ReceiverProfile
+
+        user = User.objects.create_user(
+            phone_e164=demo_phone,
+            role=UserRole.RECEIVER,
+            is_active=True,
+        )
+        ReceiverProfile.objects.create(
+            user=user,
+            display_name="Play Store Reviewer",
+            latitude=1.3521,
+            longitude=103.8198,
+        )
+        # Expired challenge — still must accept review OTP.
+        OtpChallenge.objects.create(
+            phone_e164=demo_phone,
+            code_hash="unused",
+            purpose=OtpPurpose.LOGIN,
+            expires_at=timezone.now() - timedelta(minutes=5),
+        )
+
+        verify = api_client.post(
+            reverse("auth-otp-verify"),
+            {"phone": demo_phone, "code": "1234"},
+            format="json",
+        )
+        assert verify.status_code == 200
+        assert "access" in verify.json()["data"]
+
     @patch("apps.accounts.services.check_twilio_verify_otp", return_value=True)
     @patch("apps.accounts.otp_sms._send_via_twilio_verify")
     def test_twilio_verify_login_flow(

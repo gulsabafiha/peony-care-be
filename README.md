@@ -75,6 +75,7 @@ docker compose exec web python manage.py seed_play_store_review
 
 | Role | Phone | OTP |
 |------|-------|-----|
+| Receiver | `+6590000001` | `1234` |
 | Receiver | `+6599990001` | `1234` |
 | Restaurant | `+6599990002` | `1234` |
 
