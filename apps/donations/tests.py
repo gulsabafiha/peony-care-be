@@ -658,9 +658,10 @@ class TestNearbyReceiverNotifications:
         )
         assert nearby_notes.count() == 1
         note = nearby_notes.get()
-        assert note.title == "New food near you"
-        assert "Chicken Rice" in note.body
+        assert note.title == "Chicken Rice near you!"
+        assert "Tian Tian Hainanese" in note.body
         assert note.payload["food_id"] == food_id
+        assert note.payload["food_name"] == "Chicken Rice"
         assert note.payload["restaurant_id"] == str(restaurant_user.restaurant_profile.id)
 
         assert not Notification.objects.filter(user=far_user).exists()

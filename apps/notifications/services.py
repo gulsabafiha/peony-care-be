@@ -137,11 +137,12 @@ def notify_nearby_receivers_of_new_food(
         Notification(
             user=receiver.user,
             type="NEW_FOOD_NEARBY",
-            title="New food near you",
-            body=f"{restaurant.name} just posted {food.name} nearby.",
+            title=f"{food.name} near you!",
+            body=f"{restaurant.name} just posted it nearby.",
             payload={
                 "food_id": str(food.id),
                 "restaurant_id": str(restaurant.id),
+                "food_name": food.name,
                 "distance_km": round(distance_m / 1000, 1),
             },
         )

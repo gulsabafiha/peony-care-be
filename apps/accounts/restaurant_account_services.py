@@ -35,7 +35,8 @@ from apps.notifications.settings_services import serialize_notification_settings
 logger = logging.getLogger(__name__)
 
 DELETE_CONFIRMATION_TEXT = "DELETE"
-DATA_EXPORT_COOLDOWN_HOURS = 48
+# Anti-abuse only; not tied to PDPA email ETA (DATA_EXPORT_EMAIL_ETA_HOURS).
+DATA_EXPORT_COOLDOWN_HOURS = 1
 
 
 def _get_restaurant_profile(user: User) -> RestaurantProfile:
@@ -194,16 +195,42 @@ def generate_data_export_pdf(user: User) -> bytes:
     return build_restaurant_data_pdf(user)
 
 
+def _raise_export_cooldown(user: User, latest_requested_at) -> None:
+    available_at = latest_requested_at + timedelta(hours=DATA_EXPORT_COOLDOWN_HOURS)
+    remaining_seconds = max(0, (available_at - timezone.now()).total_seconds())
+    retry_after_hours = max(1, int((remaining_seconds + 3599) // 3600))
+    logger.warning(
+        "Data export rate limited user_id=%s retry_after_hours=%s cooldown_hours=%s",
+        user.id,
+        retry_after_hours,
+        DATA_EXPORT_COOLDOWN_HOURS,
+    )
+    raise PeonyAPIException(
+        code="EXPORT_ALREADY_REQUESTED",
+        message=(
+            f"A data export was requested recently. "
+            f"Please try again in {retry_after_hours} hour"
+            f"{'s' if retry_after_hours != 1 else ''}."
+        ),
+        details={
+            "retry_after_hours": retry_after_hours,
+            "cooldown_hours": DATA_EXPORT_COOLDOWN_HOURS,
+        },
+        http_status=429,
+    )
+
+
 @transaction.atomic
 def request_data_export(user: User, request=None) -> dict:
     profile = _get_restaurant_profile(user)
     cutoff = timezone.now() - timedelta(hours=DATA_EXPORT_COOLDOWN_HOURS)
-    if RestaurantDataExport.objects.filter(user=user, requested_at__gte=cutoff).exists():
-        raise PeonyAPIException(
-            code="EXPORT_ALREADY_REQUESTED",
-            message="A data export was requested recently. Please try again later.",
-            http_status=429,
-        )
+    latest = (
+        RestaurantDataExport.objects.filter(user=user, requested_at__gte=cutoff)
+        .order_by("-requested_at")
+        .first()
+    )
+    if latest is not None:
+        _raise_export_cooldown(user, latest.requested_at)
 
     business_email = (profile.contact_email or "").strip()
     export_record = RestaurantDataExport.objects.create(

@@ -549,10 +549,13 @@ class Command(BaseCommand):
         Notification.objects.get_or_create(
             user=receiver.user,
             type="NEW_FOOD_NEARBY",
-            title="New food near you",
+            title="Chicken rice near you!",
             defaults={
-                "body": f"{restaurant.name} just posted chicken rice nearby.",
-                "payload": {"restaurant_id": str(restaurant.id)},
+                "body": f"{restaurant.name} just posted it nearby.",
+                "payload": {
+                    "restaurant_id": str(restaurant.id),
+                    "food_name": "chicken rice",
+                },
             },
         )
 
