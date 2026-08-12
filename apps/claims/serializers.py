@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import uuid
+
 from rest_framework import serializers
 
 
@@ -39,6 +43,7 @@ class ClaimHistoryItemSerializer(serializers.Serializer):
     pickup_window = serializers.CharField()
     has_review = serializers.BooleanField(required=False)
     can_review = serializers.BooleanField(required=False)
+
 
 class RestaurantClaimSerializer(serializers.Serializer):
     id = serializers.UUIDField()
@@ -139,6 +144,38 @@ class ReviewTagSerializer(serializers.Serializer):
     label = serializers.CharField()
 
 
+def _split_tags_payload(tags) -> tuple[list, list]:
+    """Accept codes, ids, labels, or tag objects from the FE ``tags`` field."""
+    tag_ids: list = []
+    tag_codes: list = []
+    if tags is None:
+        return tag_ids, tag_codes
+
+    # Single comma-separated string (multipart / form clients).
+    if isinstance(tags, str):
+        tags = [part.strip() for part in tags.split(",") if part.strip()]
+
+    for item in tags:
+        if isinstance(item, dict):
+            if item.get("id"):
+                tag_ids.append(item["id"])
+            elif item.get("code"):
+                tag_codes.append(str(item["code"]).strip())
+            elif item.get("label"):
+                tag_codes.append(str(item["label"]).strip())
+            continue
+
+        value = str(item).strip()
+        if not value:
+            continue
+        try:
+            uuid.UUID(value)
+            tag_ids.append(value)
+        except ValueError:
+            tag_codes.append(value)
+    return tag_ids, tag_codes
+
+
 class RestaurantReviewSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     restaurant_id = serializers.UUIDField()
@@ -154,6 +191,11 @@ class RestaurantReviewSerializer(serializers.Serializer):
     success_message = serializers.CharField(required=False)
 
 
+class RatingOptionSerializer(serializers.Serializer):
+    value = serializers.IntegerField()
+    label = serializers.CharField()
+
+
 class RestaurantReviewFormSerializer(serializers.Serializer):
     restaurant_id = serializers.UUIDField()
     restaurant_name = serializers.CharField()
@@ -163,6 +205,9 @@ class RestaurantReviewFormSerializer(serializers.Serializer):
     context_subtitle = serializers.CharField()
     can_review = serializers.BooleanField()
     has_review = serializers.BooleanField()
+    rating = serializers.IntegerField(allow_null=True)
+    rating_label = serializers.CharField(allow_null=True)
+    rating_options = RatingOptionSerializer(many=True)
     tags = ReviewTagSerializer(many=True)
     review = RestaurantReviewSerializer(allow_null=True)
 
@@ -180,6 +225,27 @@ class CreateRestaurantReviewSerializer(serializers.Serializer):
         required=False,
         allow_empty=True,
     )
+    # FE often posts selected chips as ``tags`` (codes, ids, labels, or objects).
+    tags = serializers.JSONField(required=False)
+
+    def validate_tags(self, value):
+        if value is None:
+            return value
+        if isinstance(value, (list, str)):
+            return value
+        raise serializers.ValidationError("tags must be a list or comma-separated string.")
+
+    def validate(self, data):
+        tags = data.pop("tags", None)
+        if tags is not None:
+            from_ids, from_codes = _split_tags_payload(tags)
+            merged_ids = list(data.get("tag_ids") or []) + from_ids
+            merged_codes = list(data.get("tag_codes") or []) + from_codes
+            if merged_ids:
+                data["tag_ids"] = merged_ids
+            if merged_codes:
+                data["tag_codes"] = merged_codes
+        return data
 
 
 class UpdateRestaurantReviewSerializer(serializers.Serializer):
@@ -195,8 +261,22 @@ class UpdateRestaurantReviewSerializer(serializers.Serializer):
         required=False,
         allow_empty=True,
     )
+    tags = serializers.JSONField(required=False)
+
+    def validate_tags(self, value):
+        if value is None:
+            return value
+        if isinstance(value, (list, str)):
+            return value
+        raise serializers.ValidationError("tags must be a list or comma-separated string.")
 
     def validate(self, data):
+        tags = data.pop("tags", serializers.empty)
+        if tags is not serializers.empty:
+            from_ids, from_codes = _split_tags_payload(tags)
+            data["tag_ids"] = list(data.get("tag_ids") or []) + from_ids
+            data["tag_codes"] = list(data.get("tag_codes") or []) + from_codes
+
         if not data:
             raise serializers.ValidationError("Provide at least one field to update.")
         return data

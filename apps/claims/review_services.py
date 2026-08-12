@@ -167,29 +167,49 @@ def _resolve_tags(
 ) -> list[ReviewTagOption]:
     ensure_review_tags()
     tag_ids = tag_ids or []
-    tag_codes = tag_codes or []
+    tag_codes = [str(code).strip() for code in (tag_codes or []) if str(code).strip()]
 
     if not tag_ids and not tag_codes:
         return []
 
-    if tag_ids:
-        tags = list(ReviewTagOption.objects.filter(id__in=tag_ids, is_active=True))
-        if len(tags) != len(set(str(tid) for tid in tag_ids)):
-            raise PeonyAPIException(
-                code="INVALID_REVIEW_TAG",
-                message="One or more review tags are invalid.",
-                http_status=400,
-            )
-        return tags
+    resolved: list[ReviewTagOption] = []
+    seen: set[str] = set()
 
-    tags = list(ReviewTagOption.objects.filter(code__in=tag_codes, is_active=True))
-    if len(tags) != len(set(tag_codes)):
-        raise PeonyAPIException(
-            code="INVALID_REVIEW_TAG",
-            message="One or more review tags are invalid.",
-            http_status=400,
-        )
-    return tags
+    if tag_ids:
+        by_id = {
+            str(option.id): option
+            for option in ReviewTagOption.objects.filter(id__in=tag_ids, is_active=True)
+        }
+        for tid in tag_ids:
+            option = by_id.get(str(tid))
+            if option is None:
+                raise PeonyAPIException(
+                    code="INVALID_REVIEW_TAG",
+                    message="One or more review tags are invalid.",
+                    http_status=400,
+                )
+            if str(option.id) not in seen:
+                resolved.append(option)
+                seen.add(str(option.id))
+
+    if tag_codes:
+        options = list(ReviewTagOption.objects.filter(is_active=True))
+        by_code = {option.code.lower(): option for option in options}
+        by_label = {option.label.lower(): option for option in options}
+        for raw in tag_codes:
+            key = raw.lower()
+            option = by_code.get(key) or by_label.get(key)
+            if option is None:
+                raise PeonyAPIException(
+                    code="INVALID_REVIEW_TAG",
+                    message="One or more review tags are invalid.",
+                    http_status=400,
+                )
+            if str(option.id) not in seen:
+                resolved.append(option)
+                seen.add(str(option.id))
+
+    return resolved
 
 
 def get_review_form(receiver: User, restaurant_id: str) -> dict:
@@ -201,6 +221,7 @@ def get_review_form(receiver: User, restaurant_id: str) -> dict:
         tz=timezone_for_restaurant(restaurant),
     )
     food_name = latest_claim.food.name
+    user_rating = review.rating if review else None
     return {
         "restaurant_id": str(restaurant.id),
         "restaurant_name": restaurant.name,
@@ -212,6 +233,12 @@ def get_review_form(receiver: User, restaurant_id: str) -> dict:
         "context_subtitle": f"{food_name} · {collected}",
         "can_review": True,
         "has_review": review is not None,
+        # Star rating for this form (user's existing rating, or null before submit).
+        "rating": user_rating,
+        "rating_label": rating_label(user_rating),
+        "rating_options": [
+            {"value": value, "label": label} for value, label in RATING_LABELS.items()
+        ],
         "tags": list_review_tags(),
         "review": _serialize_review(review) if review else None,
     }

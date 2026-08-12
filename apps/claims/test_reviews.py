@@ -143,6 +143,10 @@ class TestRestaurantReviews:
         assert data["context_subtitle"] == "Chicken Rice · collected today"
         assert data["has_review"] is False
         assert data["review"] is None
+        assert data["rating"] is None
+        assert data["rating_label"] is None
+        assert len(data["rating_options"]) == 5
+        assert data["rating_options"][0] == {"value": 1, "label": "Poor"}
         assert "claim_id" not in data
         assert "food_id" not in data
         assert len(data["tags"]) == 5
@@ -176,6 +180,41 @@ class TestRestaurantReviews:
             ).count()
             == 1
         )
+
+        # Also accept FE-style ``tags`` payload (codes / labels / objects).
+        client.delete(url)
+        create_tags = client.post(
+            url,
+            {
+                "rating": 5,
+                "tags": [
+                    "Friendly staff",
+                    {"code": "quick-pickup"},
+                    "clean-packaging",
+                ],
+                "comment": "Great pickup.",
+            },
+            format="json",
+        )
+        assert create_tags.status_code == 201
+        assert set(create_tags.json()["data"]["tag_codes"]) == {
+            "friendly-staff",
+            "quick-pickup",
+            "clean-packaging",
+        }
+        client.delete(url)
+
+        create = client.post(
+            url,
+            {
+                "rating": 4,
+                "tag_codes": ["friendly-staff", "fresh-tasty"],
+                "comment": "Warm staff and the food was still piping hot.",
+            },
+            format="json",
+        )
+        assert create.status_code == 201
+        created = create.json()["data"]
 
         form = client.get(url)
         assert form.status_code == 200
