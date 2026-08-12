@@ -113,6 +113,28 @@ def to_local(dt: datetime, tz: ZoneInfo | None = None) -> datetime:
     return dt.astimezone(zone)
 
 
+def interpret_wallclock_in_tz(dt: datetime, tz: ZoneInfo | None = None) -> datetime:
+    """
+    Keep the submitted Y-M-D H:M:S and attach the restaurant timezone.
+
+    Mobile/Swagger clients often send local clock values with a ``Z`` / UTC
+    suffix. Converting that as a real UTC instant shifts the calendar date
+    (e.g. Aug 12 19:08Z → Aug 13 01:08+06). Treating the digits as local
+    wall-clock keeps the date the user picked.
+    """
+    zone = tz or DEFAULT_TZ
+    return datetime(
+        dt.year,
+        dt.month,
+        dt.day,
+        dt.hour,
+        dt.minute,
+        dt.second,
+        dt.microsecond,
+        tzinfo=zone,
+    )
+
+
 def to_local_iso(dt: datetime, tz: ZoneInfo | None = None) -> str:
     """Serialize an instant in the given local timezone (country-aware)."""
     return to_local(dt, tz).isoformat()

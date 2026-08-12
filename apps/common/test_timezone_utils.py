@@ -6,6 +6,7 @@ from apps.common.timezone_utils import (
     BDT,
     SGT,
     format_pickup_window,
+    interpret_wallclock_in_tz,
     timezone_for_postal_code,
     to_local_iso,
 )
@@ -25,6 +26,13 @@ class TimezoneUtilsTests(SimpleTestCase):
         self.assertEqual(to_local_iso(end, BDT), "2026-08-13T01:08:11.945000+06:00")
         # Must not render as Singapore (+08).
         self.assertNotIn("+08:00", to_local_iso(start, BDT))
+
+    def test_wallclock_keeps_submitted_calendar_date(self):
+        # FE sends Aug 12 19:08Z meaning "Aug 12 19:08 local", not UTC.
+        submitted = datetime(2026, 8, 12, 19, 8, 11, 945000, tzinfo=timezone.utc)
+        local = interpret_wallclock_in_tz(submitted, BDT)
+        self.assertEqual(local.isoformat(), "2026-08-12T19:08:11.945000+06:00")
+        self.assertEqual(to_local_iso(local, BDT), "2026-08-12T19:08:11.945000+06:00")
 
     def test_singapore_donation_pickup_uses_sgt(self):
         start = datetime(2026, 8, 11, 19, 8, 11, 945000, tzinfo=timezone.utc)

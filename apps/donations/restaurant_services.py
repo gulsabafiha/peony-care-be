@@ -32,6 +32,7 @@ from apps.common.timezone_utils import (
     format_day_label,
     format_pickup_window,
     format_relative_ago,
+    interpret_wallclock_in_tz,
     now_in,
     timezone_for_restaurant,
     to_local_iso,
@@ -652,6 +653,11 @@ def create_donation(user: User, data: dict, request=None) -> dict:
     restaurant = get_restaurant_profile(user)
     tz = timezone_for_restaurant(restaurant)
 
+    # FE sends local clock values (often with a Z suffix). Keep the calendar
+    # date/time the user picked and pin them to the restaurant timezone.
+    data["pickup_start"] = interpret_wallclock_in_tz(data["pickup_start"], tz)
+    data["pickup_end"] = interpret_wallclock_in_tz(data["pickup_end"], tz)
+
     now = now_in(tz)
     if data["pickup_end"] <= now:
         raise PeonyAPIException(
@@ -733,6 +739,7 @@ def get_donation(user: User, food_id: str) -> dict:
 @transaction.atomic
 def update_donation(user: User, food_id: str, data: dict) -> dict:
     restaurant = get_restaurant_profile(user)
+    tz = timezone_for_restaurant(restaurant)
     try:
         food = FoodItem.objects.select_for_update().get(id=food_id, restaurant=restaurant)
     except FoodItem.DoesNotExist as exc:
@@ -777,9 +784,9 @@ def update_donation(user: User, food_id: str, data: dict) -> dict:
             food.status = FoodStatus.AVAILABLE
 
     if "pickup_start" in data:
-        food.pickup_start = data["pickup_start"]
+        food.pickup_start = interpret_wallclock_in_tz(data["pickup_start"], tz)
     if "pickup_end" in data:
-        food.pickup_end = data["pickup_end"]
+        food.pickup_end = interpret_wallclock_in_tz(data["pickup_end"], tz)
 
     if "recurrence_type" in data or "recurrence_days" in data:
         recurrence_type = data.get("recurrence_type", food.recurrence_type)

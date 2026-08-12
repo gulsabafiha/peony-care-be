@@ -162,11 +162,11 @@ class TestRestaurantDonations:
         )
         assert response.status_code == 201
         data = response.json()["data"]
-        assert data["pickup_start"] == "2026-08-12T01:08:11.945000+06:00"
-        assert data["pickup_end"] == "2026-08-13T01:08:11.945000+06:00"
+        assert data["pickup_start"] == "2026-08-11T19:08:11.945000+06:00"
+        assert data["pickup_end"] == "2026-08-12T19:08:11.945000+06:00"
         assert "+08:00" not in data["pickup_start"]
-        assert "1:08 AM" in data["pickup_window"]
-
+        assert "7:08 PM" in data["pickup_window"]
+        assert "12 Aug" in data["pickup_window"]
     def test_create_donation_with_photo(self, api_client, restaurant_user):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
