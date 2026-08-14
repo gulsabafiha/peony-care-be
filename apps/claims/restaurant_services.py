@@ -66,8 +66,7 @@ def _serialize_restaurant_claim(claim: FoodClaim) -> dict:
 
     window_expired_label = None
     if status == ClaimStatus.NO_SHOW:
-        end = claim.food.pickup_end.astimezone(tz)
-        window_expired_label = f"Window expired {format_clock_time(end, tz=tz)}"
+        window_expired_label = "Expired at end of day"
 
     return {
         "id": str(claim.id),

@@ -22,7 +22,7 @@ class FoodItem(models.Model):
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    category = models.CharField(max_length=20, choices=FoodCategory.choices)
+    category = models.CharField(max_length=32, choices=FoodCategory.choices)
     unit = models.CharField(max_length=20, default="pack")
     photo_url = models.URLField(max_length=500, blank=True)
     quantity_original = models.IntegerField()

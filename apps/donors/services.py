@@ -22,12 +22,12 @@ from apps.common.choices import (
 from apps.common.exceptions import PeonyAPIException
 from apps.common.timezone_utils import (
     format_pickup_window,
-    interpret_wallclock_in_tz,
     now_in,
     timezone_for_restaurant,
 )
 from apps.donations.menu_photo_services import list_public_menu_photos
 from apps.donations.models import FoodItem, MenuItem
+from apps.donations.restaurant_services import resolve_available_day_window
 from apps.donors.models import MealOrder, MealOrderItem, MoneyDonation
 
 
@@ -327,15 +327,7 @@ def create_meal_order(user: User, data: dict) -> dict:
         ) from exc
 
     tz = timezone_for_restaurant(restaurant)
-    data["pickup_start"] = interpret_wallclock_in_tz(data["pickup_start"], tz)
-    data["pickup_end"] = interpret_wallclock_in_tz(data["pickup_end"], tz)
-
-    if data["pickup_end"] <= now_in(tz):
-        raise PeonyAPIException(
-            code="INVALID_PICKUP_WINDOW",
-            message="Pickup end must be in the future.",
-            http_status=400,
-        )
+    pickup_start, pickup_end = resolve_available_day_window(tz, data.get("pickup_start"))
 
     menu_item_ids = [item["menu_item_id"] for item in data["items"]]
     menu_items = {
@@ -400,8 +392,8 @@ def create_meal_order(user: User, data: dict) -> dict:
         quantity_claimed=0,
         status=FoodStatus.AVAILABLE,
         list_status=ListStatus.ACTIVE,
-        pickup_start=data["pickup_start"],
-        pickup_end=data["pickup_end"],
+        pickup_start=pickup_start,
+        pickup_end=pickup_end,
         sponsorship_type=sponsorship_type,
         individual_donor=donor,
         sponsor_display_name=sponsor_display_name,

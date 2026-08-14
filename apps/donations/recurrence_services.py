@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from uuid import UUID
 
 from django.db import transaction
 from django.db.models import Max
+from django.utils import timezone as dj_timezone
 
 from apps.accounts.models import RestaurantProfile
 from apps.common.choices import ClosedReason, FoodStatus, ListStatus, RecurrenceType
-from apps.common.timezone_utils import now_in, timezone_for_restaurant, today_in
+from apps.common.timezone_utils import day_bounds_in, now_in, timezone_for_restaurant, today_in
 from apps.donations.models import FoodItem
 from apps.notifications.services import notify_nearby_receivers_of_new_food
 
@@ -30,24 +31,6 @@ def should_post_on(recurrence_type: str, recurrence_days: list | None, day: date
     return False
 
 
-def _local_pickup_window_for_day(
-    template: FoodItem,
-    target_day: date,
-    tz,
-) -> tuple[datetime, datetime]:
-    start_local = template.pickup_start.astimezone(tz)
-    end_local = template.pickup_end.astimezone(tz)
-    spans_midnight = end_local.date() > start_local.date()
-
-    new_start = datetime.combine(target_day, start_local.time(), tzinfo=tz)
-    end_day = target_day + timedelta(days=1) if spans_midnight else target_day
-    new_end = datetime.combine(end_day, end_local.time(), tzinfo=tz)
-
-    if new_end <= new_start:
-        new_end = new_start + (end_local - start_local)
-    return new_start, new_end
-
-
 def _series_has_listing_on(series_id: UUID, day: date, tz) -> bool:
     day_start = datetime.combine(day, time.min, tzinfo=tz)
     day_end = datetime.combine(day, time.max, tzinfo=tz)
@@ -61,7 +44,7 @@ def _series_has_listing_on(series_id: UUID, day: date, tz) -> bool:
 def _clone_donation_for_day(template: FoodItem, target_day: date) -> FoodItem | None:
     restaurant = template.restaurant
     tz = timezone_for_restaurant(restaurant)
-    pickup_start, pickup_end = _local_pickup_window_for_day(template, target_day, tz)
+    pickup_start, pickup_end = day_bounds_in(target_day, tz=tz)
 
     if pickup_end <= now_in(tz):
         return None
@@ -102,13 +85,14 @@ def _clone_donation_for_day(template: FoodItem, target_day: date) -> FoodItem | 
     return food
 
 
-def _archive_expired_listings(series_id: UUID, tz) -> None:
-    now = now_in(tz)
-    expired = FoodItem.objects.filter(
-        recurrence_series_id=series_id,
-        list_status=ListStatus.ACTIVE,
-        pickup_end__lte=now,
-    )
+def expire_ended_donations(*, restaurant: RestaurantProfile | None = None) -> int:
+    """Move listings past local midnight to the expired/past tab."""
+    now = dj_timezone.now()
+    qs = FoodItem.objects.filter(list_status=ListStatus.ACTIVE, pickup_end__lte=now)
+    if restaurant is not None:
+        qs = qs.filter(restaurant=restaurant)
+
+    expired = list(qs)
     for food in expired:
         food.list_status = ListStatus.PAST
         food.closed_at = now
@@ -126,6 +110,7 @@ def _archive_expired_listings(series_id: UUID, tz) -> None:
                 "updated_at",
             ]
         )
+    return len(expired)
 
 
 @transaction.atomic
@@ -152,7 +137,6 @@ def _repost_series(series_id: UUID, target_day: date | None = None) -> FoodItem 
 
     tz = timezone_for_restaurant(latest.restaurant)
     day = target_day or today_in(tz)
-    _archive_expired_listings(series_id, tz)
 
     if not should_post_on(latest.recurrence_type, latest.recurrence_days, day):
         return None
@@ -169,10 +153,13 @@ def ensure_recurring_donations_posted(
     target_day: date | None = None,
 ) -> list[FoodItem]:
     """
-    Create today's listing for each active DAILY/CUSTOM series that needs one.
+    Expire yesterday's listings, then create today's listing for each
+    active DAILY/CUSTOM series that needs one.
 
     Safe to call from API read paths and from a cron management command.
     """
+    expire_ended_donations(restaurant=restaurant)
+
     qs = FoodItem.objects.filter(
         recurrence_type__in=[RecurrenceType.DAILY, RecurrenceType.CUSTOM],
         recurrence_series_id__isnull=False,

@@ -76,6 +76,18 @@ def today_sgt() -> date:
     return today_in(SGT)
 
 
+def day_bounds_in(
+    day: date | None = None,
+    *,
+    tz: ZoneInfo | None = None,
+) -> tuple[datetime, datetime]:
+    """Start of the local calendar day and next midnight (exclusive end)."""
+    zone = tz or DEFAULT_TZ
+    day = day or today_in(zone)
+    start = datetime.combine(day, time.min, tzinfo=zone)
+    return start, start + timedelta(days=1)
+
+
 def next_midnight_in(tz: ZoneInfo | None = None) -> datetime:
     zone = tz or DEFAULT_TZ
     today = today_in(zone)
@@ -140,24 +152,18 @@ def to_local_iso(dt: datetime, tz: ZoneInfo | None = None) -> str:
     return to_local(dt, tz).isoformat()
 
 
-def _format_time(dt: datetime) -> str:
-    return dt.strftime("%I:%M %p").lstrip("0")
-
-
 def format_pickup_window(
     pickup_start: datetime,
     pickup_end: datetime,
     *,
     tz: ZoneInfo | None = None,
 ) -> str:
+    """Food is available all day on the listing's local calendar date."""
     zone = tz or DEFAULT_TZ
     start = to_local(pickup_start, zone)
-    end = to_local(pickup_end, zone)
     today = today_in(zone)
     day_label = "Today" if start.date() == today else start.strftime("%a, %d %b")
-    if start.date() == end.date():
-        return f"{day_label}, {_format_time(start)} — {_format_time(end)}"
-    return f"{day_label}, {_format_time(start)} — {end.strftime('%a, %d %b')}, {_format_time(end)}"
+    return f"{day_label}, pickup anytime"
 
 
 def format_pickup_window_short(
@@ -166,10 +172,7 @@ def format_pickup_window_short(
     *,
     tz: ZoneInfo | None = None,
 ) -> str:
-    zone = tz or DEFAULT_TZ
-    start = to_local(pickup_start, zone)
-    end = to_local(pickup_end, zone)
-    return f"{_format_time(start)} – {_format_time(end)}"
+    return "All day"
 
 
 def format_relative_ago(
@@ -221,12 +224,12 @@ def format_countdown_until(
     end = to_local(end, zone)
     seconds = int((end - now).total_seconds())
     if seconds <= 0:
-        return "Window closed"
+        return "Expired"
     hours, rem = divmod(seconds, 3600)
     minutes = rem // 60
     if hours:
-        return f"{hours}h {minutes}m until window closes"
-    return f"{minutes}m until window closes"
+        return f"{hours}h {minutes}m left today"
+    return f"{minutes}m left today"
 
 
 def bounding_box(lat: float, lng: float, radius_km: float) -> tuple[float, float, float, float]:

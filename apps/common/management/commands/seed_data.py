@@ -29,6 +29,7 @@ from apps.common.choices import (
     SponsorshipType,
     UserRole,
 )
+from apps.common.timezone_utils import SGT, day_bounds_in, today_in
 from apps.donations.models import FoodItem, FoodReport, FoodReportReasonOption, MenuItem
 from apps.donors.models import MealOrder, MealOrderItem, MoneyDonation
 from apps.notifications.models import Notification, NotificationSettings
@@ -138,10 +139,9 @@ class Command(BaseCommand):
             self.stdout.write(f"  {phone}")
 
     def _seed_all(self, admin_password: str) -> dict:
-        now = timezone.now()
-        pickup_start = now
-        pickup_end = now + timezone.timedelta(hours=3)
-        past_pickup_end = now - timezone.timedelta(hours=1)
+        pickup_start, pickup_end = day_bounds_in(tz=SGT)
+        yesterday = today_in(SGT) - timezone.timedelta(days=1)
+        past_pickup_start, past_pickup_end = day_bounds_in(yesterday, tz=SGT)
 
         self._seed_report_reasons()
 
@@ -210,9 +210,9 @@ class Command(BaseCommand):
         foods["joo_past"] = self._get_or_create_food(
             restaurants[1],
             "Curry Puff (2 packs)",
-            FoodCategory.SNACKS,
+            FoodCategory.PACKAGED,
             quantity=2,
-            pickup_start=now - timezone.timedelta(hours=5),
+            pickup_start=past_pickup_start,
             pickup_end=past_pickup_end,
             list_status=ListStatus.PAST,
             status=FoodStatus.EXPIRED,

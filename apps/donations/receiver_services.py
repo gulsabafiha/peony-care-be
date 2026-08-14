@@ -55,6 +55,7 @@ def _serialize_food_item(food: FoodItem, receiver_lat: float, receiver_lng: floa
         "pickup_start": to_local_iso(food.pickup_start, tz),
         "pickup_end": to_local_iso(food.pickup_end, tz),
         "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end, tz=tz),
+        "pickup_anytime": True,
         "distance_km": round(distance_m / 1000, 1),
         "restaurant": {
             "id": str(rest.id),
@@ -241,10 +242,7 @@ def _serialize_meal_summary(food: FoodItem) -> dict:
     if is_sponsored and sponsor:
         subtitle = f"{unit_label} · by {sponsor}"
     else:
-        subtitle = (
-            f"{unit_label} · pickup "
-            f"{format_pickup_window(food.pickup_start, food.pickup_end, tz=tz)}"
-        )
+        subtitle = f"{unit_label} · pickup anytime today"
     return {
         "id": str(food.id),
         "name": food.name,
@@ -260,6 +258,7 @@ def _serialize_meal_summary(food: FoodItem) -> dict:
         "pickup_start": to_local_iso(food.pickup_start, tz),
         "pickup_end": to_local_iso(food.pickup_end, tz),
         "pickup_window": format_pickup_window(food.pickup_start, food.pickup_end, tz=tz),
+        "pickup_anytime": True,
         "sponsorship_type": food.sponsorship_type,
         "is_sponsored": is_sponsored,
         "sponsor_display_name": sponsor,

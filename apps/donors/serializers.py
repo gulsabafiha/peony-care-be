@@ -105,8 +105,8 @@ class MealOrderItemInputSerializer(serializers.Serializer):
 class CreateMealOrderSerializer(serializers.Serializer):
     restaurant_id = serializers.UUIDField()
     items = MealOrderItemInputSerializer(many=True, min_length=1)
-    pickup_start = serializers.DateTimeField()
-    pickup_end = serializers.DateTimeField()
+    pickup_start = serializers.DateTimeField(required=False)
+    pickup_end = serializers.DateTimeField(required=False)
     credit_preference = serializers.ChoiceField(
         choices=CreditPreference.choices,
         required=False,

@@ -88,7 +88,7 @@ class DonationListCreateView(GenericAPIView):
                 "status",
                 str,
                 OpenApiParameter.QUERY,
-                enum=["active", "past", "inactive"],
+                enum=["active", "past", "expired", "inactive"],
             )
         ],
         responses={

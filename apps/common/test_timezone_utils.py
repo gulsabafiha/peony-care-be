@@ -38,11 +38,9 @@ class TimezoneUtilsTests(SimpleTestCase):
         start = datetime(2026, 8, 11, 19, 8, 11, 945000, tzinfo=timezone.utc)
         self.assertEqual(to_local_iso(start, SGT), "2026-08-12T03:08:11.945000+08:00")
 
-    def test_pickup_window_includes_dates_when_spanning_days(self):
+    def test_pickup_window_is_available_all_day(self):
         start = datetime(2026, 8, 11, 19, 8, 11, 945000, tzinfo=timezone.utc)
         end = datetime(2026, 8, 12, 19, 8, 11, 945000, tzinfo=timezone.utc)
         window = format_pickup_window(start, end, tz=BDT)
-        self.assertIn("1:08 AM", window)
-        self.assertIn("Thu, 13 Aug", window)
-        # Start day may show as "Today" when the test runs on that local date.
+        self.assertIn("pickup anytime", window)
         self.assertTrue("Today" in window or "Wed, 12 Aug" in window)

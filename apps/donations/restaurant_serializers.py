@@ -12,8 +12,8 @@ class CreateDonationSerializer(serializers.Serializer):
     photo_url = serializers.URLField(required=False, allow_blank=True, default="")
     photo = serializers.FileField(required=False)
     quantity = serializers.IntegerField(min_value=1)
-    pickup_start = serializers.DateTimeField()
-    pickup_end = serializers.DateTimeField()
+    pickup_start = serializers.DateTimeField(required=False)
+    pickup_end = serializers.DateTimeField(required=False)
     recurrence_type = serializers.ChoiceField(
         choices=RecurrenceType.choices,
         required=False,
@@ -49,10 +49,6 @@ class CreateDonationSerializer(serializers.Serializer):
                 )
             data["recurrence_type"] = mapping[normalized]
 
-        if data["pickup_end"] <= data["pickup_start"]:
-            raise serializers.ValidationError(
-                {"pickup_end": "Pickup end must be after pickup start."}
-            )
         return data
 
 
@@ -75,7 +71,7 @@ class UpdateDonationSerializer(serializers.Serializer):
 
 class DonationListQuerySerializer(serializers.Serializer):
     status = serializers.ChoiceField(
-        choices=["active", "past", "inactive"],
+        choices=["active", "past", "expired", "inactive"],
         default="active",
     )
 
@@ -92,6 +88,8 @@ class RestaurantDonationSerializer(serializers.Serializer):
     percent_claimed = serializers.IntegerField()
     is_done = serializers.BooleanField()
     pickup_window = serializers.CharField()
+    available_date = serializers.CharField(required=False)
+    pickup_anytime = serializers.BooleanField(required=False)
     recurrence_type = serializers.CharField()
     recurrence_days = serializers.ListField(child=serializers.IntegerField())
     recurrence_label = serializers.CharField(allow_null=True)

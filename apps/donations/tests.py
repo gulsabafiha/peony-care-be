@@ -81,6 +81,50 @@ class TestRestaurantDonations:
         assert data["unread_alerts_count"] == 0
         assert data["active_donations"]["groups"]
         assert data["today_listings"][0]["recurrence_label"] == "Daily"
+        assert data["today_listings"][0]["pickup_anytime"] is True
+        assert data["active_donations"]["groups"][0]["label"] == "Today"
+
+    def test_dashboard_only_today_expired_goes_to_donations_tab(
+        self, api_client, restaurant_user
+    ):
+        restaurant = restaurant_user.restaurant_profile
+        now = timezone.now()
+        FoodItem.objects.create(
+            restaurant=restaurant,
+            name="Yesterday Soup",
+            category="SOUP",
+            quantity_original=4,
+            quantity_available=4,
+            pickup_start=now - timedelta(days=1),
+            pickup_end=now - timedelta(hours=1),
+            list_status=ListStatus.ACTIVE,
+            status=FoodStatus.AVAILABLE,
+        )
+        client = auth_client(api_client, restaurant_user)
+        client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {"name": "Today Rice", "category": "RICE", "quantity": 3},
+            format="json",
+        )
+
+        dashboard = client.get(reverse("restaurant_donations:restaurant-dashboard"))
+        assert dashboard.status_code == 200
+        data = dashboard.json()["data"]
+        names = [item["name"] for item in data["today_listings"]]
+        assert names == ["Today Rice"]
+        group_labels = [group["label"] for group in data["active_donations"]["groups"]]
+        assert group_labels == ["Today"]
+
+        expired = client.get(
+            reverse("restaurant_donations:restaurant-donations"),
+            {"status": "expired"},
+        )
+        expired_names = [
+            item["name"]
+            for group in expired.json()["data"]["groups"]
+            for item in group["items"]
+        ]
+        assert "Yesterday Soup" in expired_names
 
     def test_create_and_list_donation(self, api_client, restaurant_user):
         client = auth_client(api_client, restaurant_user)
@@ -151,22 +195,21 @@ class TestRestaurantDonations:
             {
                 "name": "string",
                 "description": "fadsfdsfsd",
-                "category": "SNACKS",
+                "category": "PACKAGED",
                 "quantity": 1,
                 "unit": "packs",
-                "pickup_start": "2026-08-11T19:08:11.945Z",
-                "pickup_end": "2026-08-12T19:08:11.945Z",
                 "schedule": "one-time",
             },
             format="json",
         )
         assert response.status_code == 201
         data = response.json()["data"]
-        assert data["pickup_start"] == "2026-08-11T19:08:11.945000+06:00"
-        assert data["pickup_end"] == "2026-08-12T19:08:11.945000+06:00"
+        assert data["pickup_start"].endswith("+06:00")
+        assert data["pickup_end"].endswith("+06:00")
         assert "+08:00" not in data["pickup_start"]
-        assert "7:08 PM" in data["pickup_window"]
-        assert "12 Aug" in data["pickup_window"]
+        assert data["pickup_anytime"] is True
+        assert "pickup anytime" in data["pickup_window"]
+        assert data["pickup_start"].endswith("T00:00:00+06:00")
     def test_create_donation_with_photo(self, api_client, restaurant_user):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -236,7 +279,7 @@ class TestRestaurantDonations:
             reverse("restaurant_donations:restaurant-donations"),
             {
                 "name": "Bread",
-                "category": "BREAD",
+                "category": "BREAD_BAKERY",
                 "quantity": 1,
                 "pickup_start": now.isoformat(),
                 "pickup_end": (now + timedelta(hours=3)).isoformat(),
@@ -346,7 +389,7 @@ class TestRestaurantDonations:
             reverse("restaurant_donations:restaurant-donations"),
             {
                 "name": "Snacks",
-                "category": "SNACKS",
+                "category": "PACKAGED",
                 "quantity": 4,
                 "pickup_start": now.isoformat(),
                 "pickup_end": (now + timedelta(hours=2)).isoformat(),
@@ -364,6 +407,50 @@ class TestRestaurantDonations:
         data = response.json()["data"]
         assert data["name"] == "Updated Snacks"
         assert data["quantity_available"] == 6
+
+    def test_create_donation_without_pickup_window(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Chicken Rice",
+                "category": "COOKED_MEAL",
+                "quantity": 5,
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["pickup_anytime"] is True
+        assert "pickup anytime" in data["pickup_window"]
+        assert data["pickup_start"].endswith("T00:00:00+08:00")
+        food = FoodItem.objects.get(id=data["id"])
+        assert food.pickup_end > food.pickup_start
+        assert (food.pickup_end - food.pickup_start).total_seconds() == 24 * 60 * 60
+
+    def test_reject_future_date_post(self, api_client, restaurant_user):
+        from datetime import datetime, time
+
+        from apps.common.timezone_utils import timezone_for_restaurant, today_in
+
+        client = auth_client(api_client, restaurant_user)
+        tz = timezone_for_restaurant(restaurant_user.restaurant_profile)
+        tomorrow = today_in(tz) + timedelta(days=1)
+        pickup_start = datetime.combine(tomorrow, time(10, 0))
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Tomorrow Rice",
+                "category": "RICE",
+                "quantity": 2,
+                "pickup_start": pickup_start.isoformat(),
+                "pickup_end": (pickup_start + timedelta(hours=2)).isoformat(),
+            },
+            format="json",
+        )
+        assert response.status_code == 400
+        error = response.json()["error"]
+        assert error["code"] == "INVALID_AVAILABLE_DATE"
 
 
 class TestRestaurantAnalytics:
@@ -541,7 +628,7 @@ class TestRestaurantDonationsPast:
         FoodItem.objects.create(
             restaurant=restaurant,
             name="Bread Set",
-            category="BREAD",
+            category="BREAD_BAKERY",
             quantity_original=6,
             quantity_available=0,
             quantity_claimed=4,
@@ -570,6 +657,21 @@ class TestRestaurantDonationsPast:
         nasi = next(item for item in items if item["name"] == "Nasi Lemak")
         assert nasi["is_done"] is True
         assert nasi["percent_claimed"] == 100
+
+        expired = client.get(
+            reverse("restaurant_donations:restaurant-donations"),
+            {"status": "expired"},
+        )
+        assert expired.status_code == 200
+        expired_payload = expired.json()["data"]
+        assert expired_payload["summary"]["past_count"] == 2
+        expired_names = [
+            item["name"]
+            for group in expired_payload["groups"]
+            for item in group["items"]
+        ]
+        assert "Bread Set" in expired_names
+        assert "Nasi Lemak" in expired_names
 
 
 class TestNotificationsUnreadCount:
@@ -906,8 +1008,12 @@ class TestRecurringDonationRepost:
         assert len(created) == 1
         assert created[0].recurrence_series_id == template.recurrence_series_id
         assert created[0].pickup_start.astimezone(tz).date() == today
+        assert created[0].pickup_start.astimezone(tz).hour == 0
         assert created[0].quantity_available == 5
         assert created[0].id != template.id
+        template.refresh_from_db()
+        assert template.list_status == ListStatus.PAST
+        assert template.status == FoodStatus.EXPIRED
 
         # Idempotent — second run does not duplicate.
         again = ensure_recurring_donations_posted(restaurant=restaurant)

@@ -13,11 +13,17 @@ class OtpPurpose(models.TextChoices):
 
 
 class FoodCategory(models.TextChoices):
+    COOKED_MEAL = "COOKED_MEAL", "Cooked meal"
     RICE = "RICE", "Rice"
     NOODLES = "NOODLES", "Noodles"
-    BREAD = "BREAD", "Bread"
-    SNACKS = "SNACKS", "Snacks"
+    BREAD_BAKERY = "BREAD_BAKERY", "Bread & bakery"
+    VEGETABLES = "VEGETABLES", "Vegetables"
+    FRUITS = "FRUITS", "Fruits"
+    PROTEIN = "PROTEIN", "Meat & protein"
+    SOUP = "SOUP", "Soup"
+    DESSERT = "DESSERT", "Dessert"
     DRINKS = "DRINKS", "Drinks"
+    PACKAGED = "PACKAGED", "Packaged food"
     OTHER = "OTHER", "Other"
 
 
