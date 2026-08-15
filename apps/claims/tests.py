@@ -309,6 +309,45 @@ class TestClaims:
         assert food_item.quantity_available == 4
         assert FoodClaim.objects.filter(receiver=receiver_user).count() == 1
 
+    def test_claim_uses_location_settings_radius(self, api_client, receiver_user, food_item):
+        client = auth_client(api_client, receiver_user)
+        # ~2.6 km north of the restaurant — inside default 5 km browse radius.
+        far_lat = LAT + 0.0234
+        allowed = client.post(
+            reverse("receiver_claims:receiver-claims"),
+            {
+                "food_id": str(food_item.id),
+                "qr_payload": food_item.food_qr_data,
+                "lat": far_lat,
+                "lng": LNG,
+            },
+            format="json",
+        )
+        assert allowed.status_code == 201
+
+    def test_claim_rejected_outside_location_settings_radius(
+        self, api_client, receiver_user, food_item
+    ):
+        receiver_user.receiver_profile.browse_radius_km = 1.0
+        receiver_user.receiver_profile.save(update_fields=["browse_radius_km"])
+        client = auth_client(api_client, receiver_user)
+        far_lat = LAT + 0.0234
+        response = client.post(
+            reverse("receiver_claims:receiver-claims"),
+            {
+                "food_id": str(food_item.id),
+                "qr_payload": food_item.food_qr_data,
+                "lat": far_lat,
+                "lng": LNG,
+            },
+            format="json",
+        )
+        assert response.status_code == 403
+        error = response.json()["error"]
+        assert error["code"] == "TOO_FAR_FROM_RESTAURANT"
+        assert error["details"]["radius_km"] == 1.0
+        assert "1 km" in error["message"]
+
     def test_daily_limit_blocks_second_claim(self, api_client, receiver_user, restaurant_profile):
         client = auth_client(api_client, receiver_user)
         now = timezone.now()

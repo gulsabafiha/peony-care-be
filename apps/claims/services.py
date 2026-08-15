@@ -186,13 +186,22 @@ def create_claim(
         float(food.restaurant.latitude),
         float(food.restaurant.longitude),
     )
-    if distance_m > settings.MAX_CLAIM_DISTANCE_M:
+    profile = getattr(receiver, "receiver_profile", None)
+    radius_km = float(
+        getattr(profile, "browse_radius_km", None) or settings.DEFAULT_BROWSE_RADIUS_KM
+    )
+    max_distance_m = radius_km * 1000
+    if distance_m > max_distance_m:
+        radius_label = int(radius_km) if radius_km.is_integer() else radius_km
         raise PeonyAPIException(
             code="TOO_FAR_FROM_RESTAURANT",
             message=(
-                f"You must be within {settings.MAX_CLAIM_DISTANCE_M}m of the restaurant to claim."
+                f"You must be within {radius_label} km of the restaurant to claim."
             ),
-            details={"distance_m": round(distance_m)},
+            details={
+                "distance_m": round(distance_m),
+                "radius_km": radius_km,
+            },
             http_status=403,
         )
 
