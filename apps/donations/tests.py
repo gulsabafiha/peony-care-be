@@ -171,6 +171,44 @@ class TestRestaurantDonations:
         assert len(payload["groups"]) == 1
         assert len(payload["groups"][0]["items"]) == 1
 
+    def test_custom_days_accepts_weekday_names_and_legacy_category(
+        self, api_client, restaurant_user
+    ):
+        client = auth_client(api_client, restaurant_user)
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Bread Set",
+                "category": "BREAD",
+                "quantity": 2,
+                "schedule": "custom_days",
+                "recurrence_days": ["Mon", "Wed", "Fri"],
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["category"] == "BREAD_BAKERY"
+        assert data["recurrence_type"] == "CUSTOM"
+        assert data["recurrence_days"] == [0, 2, 4]
+        assert data["recurrence_label"] == "Mon, Wed, Fri"
+
+    def test_custom_days_accepts_json_string_days(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Soup",
+                "category": "SOUP",
+                "quantity": 1,
+                "schedule": "CUSTOM_DAYS",
+                "recurrence_days": "[0, 6]",
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        assert response.json()["data"]["recurrence_days"] == [0, 6]
+
     def test_bangladesh_donation_uses_dhaka_timezone(self, api_client):
         user = User.objects.create_user(
             phone_e164="+8801712345678",

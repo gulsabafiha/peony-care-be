@@ -1,13 +1,119 @@
+import json
+
 from rest_framework import serializers
 
 from apps.common.choices import FoodCategory, RecurrenceType
+
+# Older app builds still send these category values.
+_CATEGORY_ALIASES = {
+    "BREAD": FoodCategory.BREAD_BAKERY,
+    "SNACKS": FoodCategory.PACKAGED,
+}
+
+_WEEKDAY_NAME_TO_INDEX = {
+    "mon": 0,
+    "monday": 0,
+    "tue": 1,
+    "tues": 1,
+    "tuesday": 1,
+    "wed": 2,
+    "wednesday": 2,
+    "thu": 3,
+    "thur": 3,
+    "thurs": 3,
+    "thursday": 3,
+    "fri": 4,
+    "friday": 4,
+    "sat": 5,
+    "saturday": 5,
+    "sun": 6,
+    "sunday": 6,
+}
+
+
+def _normalize_category(value):
+    if value is None:
+        return value
+    key = str(value).strip().upper().replace(" ", "_").replace("&", "AND")
+    if key in ("BREAD_AND_BAKERY", "BREADANDBAKERY"):
+        return FoodCategory.BREAD_BAKERY
+    return _CATEGORY_ALIASES.get(key, value)
+
+
+def _parse_weekday(value) -> int:
+    if isinstance(value, bool):
+        raise ValueError("invalid weekday")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        for key in ("day", "value", "weekday", "index"):
+            if key in value:
+                return _parse_weekday(value[key])
+        raise ValueError("invalid weekday")
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in _WEEKDAY_NAME_TO_INDEX:
+            return _WEEKDAY_NAME_TO_INDEX[text]
+        if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
+            return int(text)
+    raise ValueError("invalid weekday")
+
+
+class FoodCategoryField(serializers.ChoiceField):
+    def __init__(self, **kwargs):
+        super().__init__(choices=FoodCategory.choices, **kwargs)
+
+    def to_internal_value(self, data):
+        return super().to_internal_value(_normalize_category(data))
+
+
+class RecurrenceDaysField(serializers.Field):
+    """Accept 0–6, string ints, weekday names, JSON lists, or comma-separated values."""
+
+    default_error_messages = {
+        "invalid": "recurrence_days must be weekdays 0–6 (Mon–Sun) or names like Mon.",
+    }
+
+    def to_internal_value(self, data):
+        if data in (None, "", []):
+            return []
+        if isinstance(data, str):
+            text = data.strip()
+            if text.startswith("["):
+                try:
+                    data = json.loads(text)
+                except json.JSONDecodeError as exc:
+                    raise serializers.ValidationError(self.error_messages["invalid"]) from exc
+            elif "," in text:
+                data = [part.strip() for part in text.split(",") if part.strip()]
+            else:
+                data = [text]
+        if not isinstance(data, list):
+            data = [data]
+
+        days: list[int] = []
+        for item in data:
+            try:
+                value = _parse_weekday(item)
+            except (TypeError, ValueError) as exc:
+                raise serializers.ValidationError(self.error_messages["invalid"]) from exc
+            if value < 0 or value > 6:
+                raise serializers.ValidationError(self.error_messages["invalid"])
+            if value not in days:
+                days.append(value)
+        return sorted(days)
+
+    def to_representation(self, value):
+        return value or []
 
 
 class CreateDonationSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     description = serializers.CharField(required=False, allow_blank=True, default="")
     notes = serializers.CharField(required=False, allow_blank=True)
-    category = serializers.ChoiceField(choices=FoodCategory.choices)
+    category = FoodCategoryField()
     unit = serializers.CharField(max_length=20, required=False, default="packs")
     photo_url = serializers.URLField(required=False, allow_blank=True, default="")
     photo = serializers.FileField(required=False)
@@ -24,11 +130,7 @@ class CreateDonationSerializer(serializers.Serializer):
         choices=["one-time", "every_day", "custom_days", "ONE_TIME", "EVERY_DAY", "CUSTOM_DAYS"],
         required=False,
     )
-    recurrence_days = serializers.ListField(
-        child=serializers.IntegerField(min_value=0, max_value=6),
-        required=False,
-        default=list,
-    )
+    recurrence_days = RecurrenceDaysField(required=False, default=list)
     source_note = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate(self, data):
@@ -55,17 +157,14 @@ class CreateDonationSerializer(serializers.Serializer):
 class UpdateDonationSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
-    category = serializers.ChoiceField(choices=FoodCategory.choices, required=False)
+    category = FoodCategoryField(required=False)
     unit = serializers.CharField(max_length=20, required=False)
     photo_url = serializers.URLField(required=False, allow_blank=True)
     quantity = serializers.IntegerField(min_value=1, required=False)
     pickup_start = serializers.DateTimeField(required=False)
     pickup_end = serializers.DateTimeField(required=False)
     recurrence_type = serializers.ChoiceField(choices=RecurrenceType.choices, required=False)
-    recurrence_days = serializers.ListField(
-        child=serializers.IntegerField(min_value=0, max_value=6),
-        required=False,
-    )
+    recurrence_days = RecurrenceDaysField(required=False)
     source_note = serializers.CharField(required=False, allow_blank=True)
 
 
