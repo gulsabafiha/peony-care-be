@@ -170,6 +170,66 @@ def browse_restaurants(lat: float, lng: float, radius_km: float | None = None) -
     return [_serialize_restaurant_browse(restaurant, lat, lng) for restaurant in restaurants]
 
 
+def _plural(count: int, singular: str, plural: str | None = None) -> str:
+    if count == 1:
+        return singular
+    return plural or f"{singular}s"
+
+
+def get_receiver_dashboard(
+    lat: float, lng: float, radius_km: float | None = None
+) -> dict:
+    """Receiver home dashboard.
+
+    Restaurant totals are platform-wide. Available food counts stay nearby.
+    """
+    from apps.donations.recurrence_services import ensure_recurring_donations_posted
+
+    ensure_recurring_donations_posted()
+    radius = radius_km or settings.DEFAULT_BROWSE_RADIUS_KM
+    nearby_restaurants = _filter_restaurants_by_radius(
+        RestaurantProfile.objects.all(),
+        lat,
+        lng,
+        radius,
+    )
+    nearby_ids = {restaurant.id for restaurant in nearby_restaurants}
+    available_foods = list(
+        _base_available_queryset().filter(restaurant_id__in=nearby_ids)
+    )
+
+    restaurants_total = RestaurantProfile.objects.count()
+    restaurants_giving_today = (
+        _base_available_queryset().values("restaurant_id").distinct().count()
+    )
+    foods_given_today = len(available_foods)
+    portions_given_today = sum(food.quantity_original for food in available_foods)
+    portions_available_today = sum(food.quantity_available for food in available_foods)
+
+    restaurants_label = (
+        f"{restaurants_giving_today} {_plural(restaurants_giving_today, 'restaurant')} "
+        f"giving food out of {restaurants_total}"
+    )
+    foods_label = (
+        f"{foods_given_today} {_plural(foods_given_today, 'food')} given today"
+    )
+
+    return {
+        "restaurants": {
+            "total": restaurants_total,
+            "giving_today": restaurants_giving_today,
+            "label": restaurants_label,
+        },
+        "foods_today": {
+            "count": foods_given_today,
+            "portions": portions_given_today,
+            "portions_available": portions_available_today,
+            "label": foods_label,
+        },
+        "radius_km": radius,
+    }
+
+
 def browse_food(lat: float, lng: float, radius_km: float | None = None) -> list[dict]:
     from apps.donations.recurrence_services import ensure_recurring_donations_posted
 

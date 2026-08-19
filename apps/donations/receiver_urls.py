@@ -5,12 +5,14 @@ from apps.donations.receiver_views import (
     BrowseRestaurantsView,
     FoodDetailView,
     FoodReportReasonsView,
+    ReceiverDashboardView,
     ReportFoodView,
     RestaurantDetailView,
     SearchFoodView,
 )
 
 urlpatterns = [
+    path("dashboard/", ReceiverDashboardView.as_view(), name="receiver-dashboard"),
     path("donations/browse/", BrowseFoodView.as_view(), name="receiver-browse"),
     path("donations/search/", SearchFoodView.as_view(), name="receiver-search"),
     path("reports/reasons/", FoodReportReasonsView.as_view(), name="receiver-report-reasons"),

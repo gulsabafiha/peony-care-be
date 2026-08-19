@@ -12,6 +12,7 @@ from apps.donations.serializers import (
     FoodReportReasonSerializer,
     FoodReportResponseSerializer,
     LocationQuerySerializer,
+    ReceiverDashboardSerializer,
     ReceiverRestaurantDetailSerializer,
     RestaurantBrowseItemSerializer,
     SearchQuerySerializer,
@@ -26,6 +27,30 @@ def _resolve_location(request, validated_data) -> tuple[float, float, float]:
         validated_data.get("lng"),
         validated_data.get("radius_km"),
     )
+
+
+class ReceiverDashboardView(GenericAPIView):
+    permission_classes = [IsReceiver]
+    serializer_class = LocationQuerySerializer
+
+    @extend_schema(
+        tags=["Receiver"],
+        summary="Receiver home dashboard",
+        parameters=[
+            OpenApiParameter("lat", float, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("lng", float, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("radius_km", float, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={
+            200: enveloped_schema(ReceiverDashboardSerializer, "ReceiverDashboardEnvelope")
+        },
+    )
+    def get(self, request):
+        serializer = self.get_serializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        lat, lng, radius_km = _resolve_location(request, serializer.validated_data)
+        data = receiver_services.get_receiver_dashboard(lat, lng, radius_km)
+        return success_response(data)
 
 
 class BrowseFoodView(GenericAPIView):

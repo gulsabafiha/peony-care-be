@@ -25,6 +25,25 @@ class SearchQuerySerializer(LocationQuerySerializer):
     )
 
 
+class ReceiverDashboardRestaurantsSerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    giving_today = serializers.IntegerField()
+    label = serializers.CharField()
+
+
+class ReceiverDashboardFoodsTodaySerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    portions = serializers.IntegerField()
+    portions_available = serializers.IntegerField()
+    label = serializers.CharField()
+
+
+class ReceiverDashboardSerializer(serializers.Serializer):
+    restaurants = ReceiverDashboardRestaurantsSerializer()
+    foods_today = ReceiverDashboardFoodsTodaySerializer()
+    radius_km = serializers.FloatField()
+
+
 class FoodBrowseItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     name = serializers.CharField()

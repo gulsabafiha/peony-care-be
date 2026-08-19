@@ -8,7 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import ReceiverProfile, RestaurantProfile, User
 from apps.claims.models import FoodClaim
-from apps.common.choices import ListStatus, UserRole
+from apps.common.choices import FoodStatus, ListStatus, UserRole
 from apps.donations.models import FoodItem
 
 pytestmark = pytest.mark.django_db
@@ -184,6 +184,86 @@ class TestBrowseAndSearch:
         names = [item["name"] for item in response.json()["data"]]
         assert "Chicken Rice" in names
         assert "Far Meal" not in names
+
+    def test_receiver_dashboard_counts_restaurants_giving_food(
+        self, api_client, receiver_user, food_item, restaurant_profile
+    ):
+        idle_user = User.objects.create_user(
+            phone_e164="+6594444444",
+            role=UserRole.RESTAURANT,
+            is_active=True,
+        )
+        idle_restaurant = RestaurantProfile.objects.create(
+            user=idle_user,
+            name="Idle Kitchen",
+            uen="200912345D",
+            address="Nearby but not giving food",
+            postal_code="427657",
+            latitude=LAT,
+            longitude=LNG,
+            contact_name="Owner",
+            is_approved=True,
+        )
+        now = timezone.now()
+        FoodItem.objects.create(
+            restaurant=restaurant_profile,
+            name="Extra Soup",
+            category="SOUP",
+            quantity_original=3,
+            quantity_available=2,
+            pickup_start=now,
+            pickup_end=now + timedelta(hours=2),
+            list_status=ListStatus.ACTIVE,
+        )
+        FoodItem.objects.create(
+            restaurant=idle_restaurant,
+            name="Expired Soup",
+            category="SOUP",
+            quantity_original=4,
+            quantity_available=4,
+            pickup_start=now - timedelta(hours=4),
+            pickup_end=now - timedelta(hours=1),
+            list_status=ListStatus.ACTIVE,
+            status=FoodStatus.EXPIRED,
+        )
+        far_user = User.objects.create_user(
+            phone_e164="+6593333334",
+            role=UserRole.RESTAURANT,
+            is_active=True,
+        )
+        far_restaurant = RestaurantProfile.objects.create(
+            user=far_user,
+            name="Far Restaurant",
+            uen="200912345E",
+            address="Far away",
+            postal_code="888888",
+            latitude=1.4,
+            longitude=104.0,
+            contact_name="Owner",
+            is_approved=True,
+        )
+        FoodItem.objects.create(
+            restaurant=far_restaurant,
+            name="Far Meal",
+            category="RICE",
+            quantity_original=8,
+            quantity_available=8,
+            pickup_start=now,
+            pickup_end=now + timedelta(hours=2),
+            list_status=ListStatus.ACTIVE,
+        )
+
+        client = auth_client(api_client, receiver_user)
+        response = client.get(reverse("receiver_donations:receiver-dashboard"))
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["restaurants"]["total"] == 3
+        assert data["restaurants"]["giving_today"] == 2
+        assert data["restaurants"]["label"] == "2 restaurants giving food out of 3"
+        assert data["foods_today"]["count"] == 2
+        assert data["foods_today"]["portions"] == 8
+        assert data["foods_today"]["portions_available"] == 7
+        assert data["foods_today"]["label"] == "2 foods given today"
 
     def test_browse_restaurants(self, api_client, receiver_user, food_item, restaurant_profile):
         restaurant_profile.opening_hours = "10:00–21:00 · Mon, Tue, Wed, Thu, Fri, Sat, Sun"
