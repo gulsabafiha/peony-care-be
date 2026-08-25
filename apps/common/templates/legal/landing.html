@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Udufood — surplus meals, shared in Singapore</title>
+  <meta name="description" content="Udufood is a Singapore app that lets restaurants share leftover meals with people nearby. Claim one complementary meal a day.">
+  <style>
+    :root {
+      --ink: #1a1a2e;
+      --muted: #5c5c6e;
+      --bg: #faf9f7;
+      --card: #ffffff;
+      --accent: #c8102e;
+      --accent-dark: #9e0c24;
+      --line: #e8e4de;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+    header {
+      background: var(--accent);
+      color: #fff;
+      padding: 1.25rem 1.25rem 3.5rem;
+    }
+    header .wrap, .wrap {
+      max-width: 44rem;
+      margin: 0 auto;
+    }
+    .brand {
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      font-size: 1.15rem;
+    }
+    h1 {
+      font-size: clamp(1.85rem, 5vw, 2.45rem);
+      line-height: 1.15;
+      margin: 1.5rem 0 0.75rem;
+    }
+    .lede {
+      font-size: 1.1rem;
+      max-width: 36rem;
+      margin: 0;
+      opacity: 0.95;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin-top: 1.5rem;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.7rem 1.15rem;
+      border-radius: 999px;
+      font-weight: 700;
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+    .btn-light {
+      background: #fff;
+      color: var(--accent);
+    }
+    .btn-light:hover { background: #f3f3f3; }
+    .btn-ghost {
+      background: transparent;
+      color: #fff;
+      border: 1.5px solid rgba(255,255,255,0.7);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.12); }
+    main { padding: 0 1.25rem 3rem; }
+    .cards {
+      display: grid;
+      gap: 1rem;
+      margin-top: -1.75rem;
+    }
+    @media (min-width: 640px) {
+      .cards { grid-template-columns: 1fr 1fr 1fr; }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.15rem 1.1rem 1.25rem;
+      box-shadow: 0 8px 24px rgba(26,26,46,0.06);
+    }
+    .card h2 {
+      margin: 0 0 0.4rem;
+      font-size: 1.05rem;
+      color: var(--accent);
+    }
+    .card p { margin: 0; color: #2a2a38; font-size: 0.95rem; }
+    section {
+      max-width: 44rem;
+      margin: 2.25rem auto 0;
+    }
+    section h2 {
+      font-size: 1.35rem;
+      margin: 0 0 0.75rem;
+    }
+    ol { padding-left: 1.2rem; margin: 0; }
+    li { margin: 0.4rem 0; }
+    .play {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin-top: 0.5rem;
+      padding: 0.7rem 1.1rem;
+      background: var(--ink);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+    .play:hover { background: #000; }
+    .play small { display: block; font-weight: 500; font-size: 0.7rem; opacity: 0.8; }
+    footer {
+      max-width: 44rem;
+      margin: 0 auto 2.5rem;
+      padding: 0 1.25rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">Udufood</div>
+      <h1>Surplus meals, shared with neighbours.</h1>
+      <p class="lede">
+        Udufood is a Singapore app that connects restaurants with leftover food
+        to people nearby who can use a complementary meal.
+      </p>
+      <div class="actions">
+        <a class="btn btn-light" href="https://play.google.com/store/apps/details?id=com.udufood.app">Get the app</a>
+        <a class="btn btn-ghost" href="mailto:support@udufood.com">Contact us</a>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="wrap cards">
+      <article class="card">
+        <h2>Receivers</h2>
+        <p>See meals near you, claim one a day, and pick it up with a QR code. Sign in with your mobile number.</p>
+      </article>
+      <article class="card">
+        <h2>Restaurants</h2>
+        <p>List surplus food before closing time. Receivers collect it from your shop — less waste, more meals shared.</p>
+      </article>
+      <article class="card">
+        <h2>Donors</h2>
+        <p>Sponsor meals at partner restaurants so more people can eat, even when there is no leftover stock.</p>
+      </article>
+    </div>
+    <section>
+      <h2>How it works</h2>
+      <ol>
+        <li>Download Udufood on Google Play and register with a Singapore mobile number.</li>
+        <li>Restaurants post leftover dishes. Receivers browse what is nearby.</li>
+        <li>Claim a meal, show your QR at pickup, and collect it in the stated window.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>Get Udufood</h2>
+      <p>Available on Android. For restaurant onboarding or questions, email <a href="mailto:support@udufood.com">support@udufood.com</a>.</p>
+      <a class="play" href="https://play.google.com/store/apps/details?id=com.udufood.app">
+        <span>
+          <small>GET IT ON</small>
+          Google Play
+        </span>
+      </a>
+    </section>
+  </main>
+  <footer>
+    <a href="/privacy">Privacy Policy</a> ·
+    <a href="/terms">Terms of Use</a> ·
+    <a href="/delete-account">Delete account</a><br>
+    Udufood operates in Singapore. Email
+    <a href="mailto:support@udufood.com">support@udufood.com</a>
+  </footer>
+</body>
+</html>

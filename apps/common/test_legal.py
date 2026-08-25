@@ -1,6 +1,16 @@
 from django.urls import reverse
 
 
+def test_landing_page(client):
+    response = client.get(reverse("landing"))
+    assert response.status_code == 200
+    assert b"Udufood" in response.content
+    assert b"Singapore" in response.content
+    assert b"Receivers" in response.content
+    assert b"Restaurants" in response.content
+    assert b"support@udufood.com" in response.content
+
+
 def test_privacy_page(client):
     response = client.get(reverse("privacy-policy"))
     assert response.status_code == 200

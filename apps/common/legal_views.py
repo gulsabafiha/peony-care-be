@@ -3,6 +3,11 @@ from django.views.decorators.http import require_GET
 
 
 @require_GET
+def landing(request):
+    return render(request, "legal/landing.html")
+
+
+@require_GET
 def privacy_policy(request):
     return render(request, "legal/privacy.html", {"page_title": "Privacy Policy"})
 

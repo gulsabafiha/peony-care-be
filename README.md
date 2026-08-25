@@ -81,10 +81,11 @@ docker compose exec web python manage.py seed_play_store_review
 
 Configure via `PLAY_STORE_REVIEW_PHONES` and `PLAY_STORE_REVIEW_OTP`. Put these credentials in the Play Console review notes.
 
-### Privacy & Terms (Play Store URLs)
+### Public site & Play Store URLs
 
 | URL | Page |
 |-----|------|
+| `https://udufood.com/` | Landing page |
 | `https://udufood.com/privacy` | Privacy Policy (receivers + restaurants) |
 | `https://udufood.com/terms` | Terms of Use (receivers + restaurants) |
 | `https://udufood.com/delete-account` | Account deletion (Play Store Data safety URL) |
