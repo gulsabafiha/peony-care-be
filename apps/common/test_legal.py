@@ -25,3 +25,4 @@ def test_delete_account_page(client):
     assert b"support@udufood.com" in response.content
     assert b"What we delete" in response.content
     assert b"30 days" in response.content
+    assert b"Delete some data, keep your account" in response.content
