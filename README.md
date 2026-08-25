@@ -87,6 +87,7 @@ Configure via `PLAY_STORE_REVIEW_PHONES` and `PLAY_STORE_REVIEW_OTP`. Put these 
 |-----|------|
 | `https://udufood.com/privacy` | Privacy Policy (receivers + restaurants) |
 | `https://udufood.com/terms` | Terms of Use (receivers + restaurants) |
+| `https://udufood.com/delete-account` | Account deletion (Play Store Data safety URL) |
 
 Also available on the API host (`https://api.udufood.com/privacy`). For the apex domain, point Namecheap `@` A record to the Elastic IP and add `udufood.com` to nginx `server_name` + `ALLOWED_HOSTS`.
 

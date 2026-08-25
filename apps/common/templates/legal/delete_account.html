@@ -1,0 +1,68 @@
+{% extends "legal/base_legal.html" %}
+
+{% block toc %}
+<nav class="toc" aria-label="On this page">
+  <a href="#how">How to delete</a>
+  <a href="#deleted">What is deleted</a>
+  <a href="#kept">What is kept</a>
+</nav>
+{% endblock %}
+
+{% block content %}
+<p>
+  This page is for the <strong>Udufood</strong> app. Use it to request deletion
+  of your account and associated personal data. You do not need to stay signed
+  in to send a request.
+</p>
+
+<h2 id="how">How to delete your account</h2>
+
+<h3>Option 1 — In the app (fastest)</h3>
+<ol>
+  <li>Open Udufood and sign in with your mobile number.</li>
+  <li>Go to <strong>Profile</strong> or <strong>Account settings</strong>.</li>
+  <li>Choose <strong>Delete account</strong> and type DELETE to confirm.</li>
+</ol>
+
+<h3>Option 2 — Email us</h3>
+<p>
+  Send a message from the phone number on your account to
+  <a href="mailto:support@udufood.com?subject=Udufood%20account%20deletion">support@udufood.com</a>
+  with the subject line <strong>Udufood account deletion</strong>. Include:
+</p>
+<ul>
+  <li>The mobile number registered on the account (with country code, e.g. +65…)</li>
+  <li>Whether you are a receiver or a restaurant</li>
+  <li>The words <strong>Please delete my Udufood account</strong></li>
+</ul>
+<p>
+  We will confirm by email and complete deletion within 30 days.
+</p>
+
+<h2 id="deleted">What we delete</h2>
+<ul>
+  <li>Your account, mobile number, and display name</li>
+  <li>Profile photos, food listing photos, and saved location history</li>
+  <li>Claims, listings, reviews, and in-app notifications tied to your account</li>
+  <li>Sign-in tokens so the account cannot be used again</li>
+</ul>
+<h2 id="kept">What we keep, and for how long</h2>
+<ul>
+  <li>
+    <strong>Receivers:</strong> personal data is removed within 30 days.
+    Anonymised claim totals (no name or phone) may be kept for impact reporting.
+  </li>
+  <li>
+    <strong>Restaurants:</strong> public profile, photos, and donation history
+    are deleted. UEN and business contact details may be kept for 90 days for
+    tax records, then removed. Sponsored-meal payout records may be kept for
+    7 years where Singapore company law requires it.
+  </li>
+</ul>
+
+<p class="note">
+  Need a copy of your data first? Email
+  <a href="mailto:support@udufood.com">support@udufood.com</a>
+  or use data export in the app, then request deletion.
+</p>
+{% endblock %}
