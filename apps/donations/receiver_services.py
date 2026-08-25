@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 
 from apps.accounts.models import RestaurantProfile, User
 from apps.common.choices import FoodCategory, FoodStatus, ListStatus
@@ -181,30 +181,24 @@ def get_receiver_dashboard(
 ) -> dict:
     """Receiver home dashboard.
 
-    Restaurant totals are platform-wide. Available food counts stay nearby.
+    Restaurant and food totals are platform-wide. Nearby browse lists stay
+    radius-filtered in the meals/restaurants endpoints.
     """
     from apps.donations.recurrence_services import ensure_recurring_donations_posted
 
     ensure_recurring_donations_posted()
     radius = radius_km or settings.DEFAULT_BROWSE_RADIUS_KM
-    nearby_restaurants = _filter_restaurants_by_radius(
-        RestaurantProfile.objects.all(),
-        lat,
-        lng,
-        radius,
-    )
-    nearby_ids = {restaurant.id for restaurant in nearby_restaurants}
-    available_foods = list(
-        _base_available_queryset().filter(restaurant_id__in=nearby_ids)
-    )
+    available_foods = _base_available_queryset()
 
     restaurants_total = RestaurantProfile.objects.count()
-    restaurants_giving_today = (
-        _base_available_queryset().values("restaurant_id").distinct().count()
+    restaurants_giving_today = available_foods.values("restaurant_id").distinct().count()
+    food_totals = available_foods.aggregate(
+        portions=Sum("quantity_original"),
+        portions_available=Sum("quantity_available"),
     )
-    foods_given_today = len(available_foods)
-    portions_given_today = sum(food.quantity_original for food in available_foods)
-    portions_available_today = sum(food.quantity_available for food in available_foods)
+    foods_given_today = available_foods.count()
+    portions_given_today = food_totals["portions"] or 0
+    portions_available_today = food_totals["portions_available"] or 0
 
     restaurants_label = (
         f"{restaurants_giving_today} {_plural(restaurants_giving_today, 'restaurant')} "

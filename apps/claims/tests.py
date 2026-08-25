@@ -260,10 +260,10 @@ class TestBrowseAndSearch:
         assert data["restaurants"]["total"] == 3
         assert data["restaurants"]["giving_today"] == 2
         assert data["restaurants"]["label"] == "2 restaurants giving food out of 3"
-        assert data["foods_today"]["count"] == 2
-        assert data["foods_today"]["portions"] == 8
-        assert data["foods_today"]["portions_available"] == 7
-        assert data["foods_today"]["label"] == "2 foods given today"
+        assert data["foods_today"]["count"] == 3
+        assert data["foods_today"]["portions"] == 16
+        assert data["foods_today"]["portions_available"] == 15
+        assert data["foods_today"]["label"] == "3 foods given today"
 
     def test_browse_restaurants(self, api_client, receiver_user, food_item, restaurant_profile):
         restaurant_profile.opening_hours = "10:00–21:00 · Mon, Tue, Wed, Thu, Fri, Sat, Sun"
