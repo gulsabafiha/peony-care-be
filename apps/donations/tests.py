@@ -193,6 +193,61 @@ class TestRestaurantDonations:
         assert data["recurrence_days"] == [0, 2, 4]
         assert data["recurrence_label"] == "Mon, Wed, Fri"
 
+    def test_custom_days_skip_today_until_next_selected_day(self, api_client, restaurant_user):
+        from apps.common.timezone_utils import timezone_for_restaurant, today_in
+        from apps.donations.receiver_services import _base_available_queryset
+        from apps.donations.recurrence_services import next_scheduled_day
+
+        client = auth_client(api_client, restaurant_user)
+        tz = timezone_for_restaurant(restaurant_user.restaurant_profile)
+        today = today_in(tz)
+        days = [day for day in range(7) if day != today.weekday()]
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Weekday Rice",
+                "category": "RICE",
+                "quantity": 2,
+                "schedule": "custom_days",
+                "recurrence_days": days,
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        expected = next_scheduled_day(days, today)
+        assert data["list_status"] == ListStatus.ACTIVE
+        assert data["available_date"] == expected.isoformat()
+        assert data["available_date"] != today.isoformat()
+
+        dashboard = client.get(reverse("restaurant_donations:restaurant-dashboard"))
+        assert dashboard.status_code == 200
+        assert dashboard.json()["data"]["active_count"] == 0
+        assert dashboard.json()["data"]["today_listings"] == []
+        assert not _base_available_queryset().filter(id=data["id"]).exists()
+
+    def test_custom_days_post_today_when_today_is_selected(self, api_client, restaurant_user):
+        from apps.common.timezone_utils import timezone_for_restaurant, today_in
+
+        client = auth_client(api_client, restaurant_user)
+        tz = timezone_for_restaurant(restaurant_user.restaurant_profile)
+        today = today_in(tz)
+        response = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Sunday Soup",
+                "category": "SOUP",
+                "quantity": 1,
+                "schedule": "custom_days",
+                "recurrence_days": [today.weekday()],
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["available_date"] == today.isoformat()
+        assert data["list_status"] == ListStatus.ACTIVE
+
     def test_custom_days_accepts_json_string_days(self, api_client, restaurant_user):
         client = auth_client(api_client, restaurant_user)
         response = client.post(
@@ -362,6 +417,67 @@ class TestRestaurantDonations:
         )
         assert delete.status_code == 200
         assert FoodItem.objects.filter(id=food_id).count() == 0
+
+    def test_reactivate_expired_inactive_listing_moves_to_today(
+        self, api_client, restaurant_user
+    ):
+        from apps.common.timezone_utils import (
+            day_bounds_in,
+            timezone_for_restaurant,
+            today_in,
+        )
+
+        client = auth_client(api_client, restaurant_user)
+        now = timezone.now()
+        create = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Paused Rice",
+                "category": "RICE",
+                "quantity": 2,
+                "pickup_start": now.isoformat(),
+                "pickup_end": (now + timedelta(hours=2)).isoformat(),
+            },
+            format="json",
+        )
+        food_id = create.json()["data"]["id"]
+        close = client.post(
+            reverse("restaurant_donations:restaurant-donation-close", kwargs={"food_id": food_id})
+        )
+        assert close.status_code == 200
+
+        tz = timezone_for_restaurant(restaurant_user.restaurant_profile)
+        yesterday = today_in(tz) - timedelta(days=1)
+        pickup_start, pickup_end = day_bounds_in(yesterday, tz=tz)
+        FoodItem.objects.filter(id=food_id).update(
+            pickup_start=pickup_start,
+            pickup_end=pickup_end,
+        )
+
+        reactivate = client.post(
+            reverse(
+                "restaurant_donations:restaurant-donation-reactivate",
+                kwargs={"food_id": food_id},
+            )
+        )
+        assert reactivate.status_code == 200
+        data = reactivate.json()["data"]
+        assert data["list_status"] == ListStatus.ACTIVE
+        assert data["available_date"] == today_in(tz).isoformat()
+        assert data["closed_at"] is None
+        assert data["closed_reason"] is None
+
+        active_list = client.get(
+            reverse("restaurant_donations:restaurant-donations"),
+            {"status": "active"},
+        )
+        assert active_list.status_code == 200
+        names = [
+            item["name"]
+            for group in active_list.json()["data"]["groups"]
+            for item in group["items"]
+        ]
+        assert "Paused Rice" in names
 
     def test_get_donation_detail(self, api_client, restaurant_user):
         client = auth_client(api_client, restaurant_user)

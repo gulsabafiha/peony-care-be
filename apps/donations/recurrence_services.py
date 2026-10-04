@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
 from django.db import transaction
@@ -29,6 +29,16 @@ def should_post_on(recurrence_type: str, recurrence_days: list | None, day: date
         days = recurrence_days or []
         return _weekday_mon0(day) in {int(d) for d in days}
     return False
+
+
+def next_scheduled_day(recurrence_days: list | None, after: date) -> date:
+    """Next calendar day after ``after`` that is included in a custom schedule."""
+    selected = {int(day) for day in (recurrence_days or [])}
+    for offset in range(1, 8):
+        candidate = after + timedelta(days=offset)
+        if candidate.weekday() in selected:
+            return candidate
+    raise ValueError("recurrence_days must include at least one weekday")
 
 
 def _series_has_listing_on(series_id: UUID, day: date, tz) -> bool:
@@ -159,6 +169,7 @@ def ensure_recurring_donations_posted(
     Safe to call from API read paths and from a cron management command.
     """
     expire_ended_donations(restaurant=restaurant)
+    _notify_scheduled_listings_now_live(restaurant=restaurant)
 
     qs = FoodItem.objects.filter(
         recurrence_type__in=[RecurrenceType.DAILY, RecurrenceType.CUSTOM],
@@ -183,3 +194,31 @@ def ensure_recurring_donations_posted(
         if food is not None:
             created.append(food)
     return created
+
+
+def _notify_scheduled_listings_now_live(*, restaurant: RestaurantProfile | None = None) -> None:
+    """Alert receivers when a custom listing scheduled ahead of today becomes live."""
+    from django.db.models import F
+
+    from apps.notifications.models import Notification
+
+    now = dj_timezone.now()
+    qs = FoodItem.objects.filter(
+        list_status=ListStatus.ACTIVE,
+        pickup_start__lte=now,
+        pickup_end__gt=now,
+        pickup_start__gt=F("created_at"),
+    ).select_related("restaurant")
+    if restaurant is not None:
+        qs = qs.filter(restaurant=restaurant)
+
+    from apps.donations.restaurant_services import _nearby_receivers
+
+    for food in qs:
+        if Notification.objects.filter(
+            type="NEW_FOOD_NEARBY",
+            payload__food_id=str(food.id),
+        ).exists():
+            continue
+        nearby = _nearby_receivers(food.restaurant)
+        notify_nearby_receivers_of_new_food(food, food.restaurant, nearby)

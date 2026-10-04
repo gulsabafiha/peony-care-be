@@ -26,6 +26,7 @@ def _base_available_queryset():
         .filter(
             list_status=ListStatus.ACTIVE,
             quantity_available__gt=0,
+            pickup_start__lte=now,
             pickup_end__gt=now,
         )
         .exclude(status=FoodStatus.EXPIRED)
@@ -99,6 +100,7 @@ def _active_meal_count_filter(now):
     return Q(
         food_items__list_status=ListStatus.ACTIVE,
         food_items__quantity_available__gt=0,
+        food_items__pickup_start__lte=now,
         food_items__pickup_end__gt=now,
     ) & ~Q(food_items__status=FoodStatus.EXPIRED)
 

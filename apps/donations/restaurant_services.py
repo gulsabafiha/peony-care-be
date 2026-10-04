@@ -644,10 +644,22 @@ def _build_post_success_payload(
 def create_donation(user: User, data: dict, request=None) -> dict:
     restaurant = get_restaurant_profile(user)
     tz = timezone_for_restaurant(restaurant)
-    pickup_start, pickup_end = resolve_available_day_window(tz, data.get("pickup_start"))
-
     recurrence_type = data.get("recurrence_type", RecurrenceType.NONE)
     recurrence_days = _validate_recurrence(recurrence_type, data.get("recurrence_days"))
+
+    from apps.donations.recurrence_services import next_scheduled_day, should_post_on
+
+    today = today_in(tz)
+    if recurrence_type == RecurrenceType.CUSTOM and not should_post_on(
+        recurrence_type, recurrence_days, today
+    ):
+        # Today is not a selected weekday. First listing opens on the next one.
+        pickup_start, pickup_end = day_bounds_in(
+            next_scheduled_day(recurrence_days, today),
+            tz=tz,
+        )
+    else:
+        pickup_start, pickup_end = resolve_available_day_window(tz, data.get("pickup_start"))
 
     photo_url = data.get("photo_url", "") or ""
     uploaded_photo = data.get("photo")
@@ -683,7 +695,8 @@ def create_donation(user: User, data: dict, request=None) -> dict:
     restaurant.save(update_fields=["total_food_shared"])
 
     nearby = _nearby_receivers(restaurant)
-    notify_nearby_receivers_of_new_food(food, restaurant, nearby)
+    if pickup_start <= now_in(tz):
+        notify_nearby_receivers_of_new_food(food, restaurant, nearby)
 
     result = _serialize_restaurant_donation(food)
     result.update(
@@ -816,12 +829,12 @@ def reactivate_donation(user: User, food_id: str) -> dict:
             http_status=409,
         )
 
-    if food.pickup_end <= now_in(timezone_for_restaurant(restaurant)):
-        raise PeonyAPIException(
-            code="LISTING_EXPIRED",
-            message="Cannot reactivate — this listing has expired.",
-            http_status=410,
-        )
+    # Paused listings stay INACTIVE after local midnight (only ACTIVE ones
+    # roll to PAST). Put the listing back on today's window so reactivate
+    # works for any deactivated donation, including ones paused on a prior day.
+    tz = timezone_for_restaurant(restaurant)
+    if food.pickup_end <= now_in(tz):
+        food.pickup_start, food.pickup_end = day_bounds_in(today_in(tz), tz=tz)
 
     food.list_status = ListStatus.ACTIVE
     food.closed_at = None
@@ -1157,12 +1170,14 @@ def _serialize_restaurant_detail_page(
         data["distance_km"] = round(distance_m / 1000, 1)
 
     if include_meals:
+        now = now_in(timezone_for_restaurant(restaurant))
         foods = list(
             FoodItem.objects.filter(
                 restaurant=restaurant,
                 list_status=ListStatus.ACTIVE,
                 quantity_available__gt=0,
-                pickup_end__gt=now_in(timezone_for_restaurant(restaurant)),
+                pickup_start__lte=now,
+                pickup_end__gt=now,
             )
             .exclude(status=FoodStatus.EXPIRED)
             .order_by("pickup_start", "name")
