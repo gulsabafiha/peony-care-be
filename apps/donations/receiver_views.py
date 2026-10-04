@@ -79,7 +79,7 @@ class ReceiverDashboardView(GenericAPIView):
 
 
 class BrowseFoodView(GenericAPIView):
-    permission_classes = [IsReceiver]
+    permission_classes = [AllowAny]
     serializer_class = LocationQuerySerializer
 
     @extend_schema(
@@ -136,7 +136,7 @@ class SearchFoodView(GenericAPIView):
 
 
 class BrowseRestaurantsView(GenericAPIView):
-    permission_classes = [IsReceiver]
+    permission_classes = [AllowAny]
     serializer_class = LocationQuerySerializer
 
     @extend_schema(

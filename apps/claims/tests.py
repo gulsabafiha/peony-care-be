@@ -151,6 +151,21 @@ class TestBrowseAndSearch:
         assert response.status_code == 400
         assert response.json()["error"]["code"] == "LOCATION_REQUIRED"
 
+    def test_browse_open_to_guests(self, api_client, food_item):
+        response = api_client.get(
+            reverse("receiver_donations:receiver-browse"),
+            {"lat": LAT, "lng": LNG, "radius_km": 5},
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert len(data) == 1
+        assert data[0]["name"] == "Chicken Rice"
+
+    def test_browse_guest_requires_location(self, api_client, food_item):
+        response = api_client.get(reverse("receiver_donations:receiver-browse"))
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "LOCATION_REQUIRED"
+
     def test_browse_uses_profile_location_by_default(self, api_client, receiver_user, food_item):
         client = auth_client(api_client, receiver_user)
         response = client.get(reverse("receiver_donations:receiver-browse"))
@@ -302,6 +317,21 @@ class TestBrowseAndSearch:
         assert data[0]["opening_hours"] == "10:00–21:00 · Mon, Tue, Wed, Thu, Fri, Sat, Sun"
         assert data[0]["opens_at"] == "10:00:00"
         assert data[0]["closes_at"] == "21:00:00"
+
+    def test_browse_restaurants_open_to_guests(self, api_client, food_item, restaurant_profile):
+        response = api_client.get(
+            reverse("receiver_donations:receiver-restaurants-browse"),
+            {"lat": LAT, "lng": LNG, "radius_km": 5},
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert len(data) == 1
+        assert data[0]["name"] == "Tian Tian Hainanese"
+
+    def test_browse_restaurants_guest_requires_location(self, api_client, food_item):
+        response = api_client.get(reverse("receiver_donations:receiver-restaurants-browse"))
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "LOCATION_REQUIRED"
 
     def test_restaurant_detail(self, api_client, receiver_user, restaurant_profile, food_item):
         client = auth_client(api_client, receiver_user)
