@@ -8,7 +8,7 @@ from apps.claims.serializers import (
     CreateClaimSerializer,
     DailyLimitSerializer,
 )
-from apps.common.exceptions import success_response
+from apps.common.exceptions import PeonyAPIException, success_response
 from apps.common.permissions import IsReceiver
 from apps.common.schema import enveloped_schema
 
@@ -48,6 +48,15 @@ class ClaimsView(GenericAPIView):
         request=CreateClaimSerializer,
         responses={201: enveloped_schema(ClaimResponseSerializer, "CreateClaimEnvelope")},
     )
+    def permission_denied(self, request, message=None, code=None):
+        if request.method == "POST" and not getattr(request.user, "is_authenticated", False):
+            raise PeonyAPIException(
+                code="AUTH_REQUIRED",
+                message="Sign up or log in to claim this food.",
+                http_status=401,
+            )
+        super().permission_denied(request, message=message, code=code)
+
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

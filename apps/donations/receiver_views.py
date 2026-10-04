@@ -1,8 +1,10 @@
+from django.conf import settings
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.generics import GenericAPIView
+from rest_framework.permissions import AllowAny
 
 from apps.accounts import receiver_services as account_receiver_services
-from apps.common.exceptions import success_response
+from apps.common.exceptions import PeonyAPIException, success_response
 from apps.common.permissions import IsReceiver
 from apps.common.schema import enveloped_schema
 from apps.donations import receiver_services
@@ -20,19 +22,38 @@ from apps.donations.serializers import (
 )
 
 
-def _resolve_location(request, validated_data) -> tuple[float, float, float]:
-    return account_receiver_services.resolve_browse_context(
-        request.user,
-        validated_data.get("lat"),
-        validated_data.get("lng"),
-        validated_data.get("radius_km"),
-    )
+def _resolve_location(
+    request, validated_data, *, allow_missing_location: bool = False
+) -> tuple[float, float, float]:
+    lat = validated_data.get("lat")
+    lng = validated_data.get("lng")
+    radius_km = validated_data.get("radius_km")
+
+    user = request.user
+    if getattr(user, "is_authenticated", False):
+        return account_receiver_services.resolve_browse_context(
+            user,
+            lat,
+            lng,
+            radius_km,
+        )
+
+    if lat is None or lng is None:
+        if allow_missing_location:
+            return 0.0, 0.0, radius_km or settings.DEFAULT_BROWSE_RADIUS_KM
+        raise PeonyAPIException(
+            code="LOCATION_REQUIRED",
+            message="Location is required. Provide lat and lng.",
+            http_status=400,
+        )
+
+    return float(lat), float(lng), radius_km or settings.DEFAULT_BROWSE_RADIUS_KM
 
 
 class ReceiverDashboardView(GenericAPIView):
-    permission_classes = [IsReceiver]
+    permission_classes = [AllowAny]
     serializer_class = LocationQuerySerializer
-
+ 
     @extend_schema(
         tags=["Receiver"],
         summary="Receiver home dashboard",
@@ -48,7 +69,11 @@ class ReceiverDashboardView(GenericAPIView):
     def get(self, request):
         serializer = self.get_serializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
-        lat, lng, radius_km = _resolve_location(request, serializer.validated_data)
+        lat, lng, radius_km = _resolve_location(
+            request,
+            serializer.validated_data,
+            allow_missing_location=True,
+        )
         data = receiver_services.get_receiver_dashboard(lat, lng, radius_km)
         return success_response(data)
 
@@ -214,7 +239,7 @@ class ReportFoodView(GenericAPIView):
 
 
 class FoodDetailView(GenericAPIView):
-    permission_classes = [IsReceiver]
+    permission_classes = [AllowAny]
     serializer_class = LocationQuerySerializer
 
     @extend_schema(

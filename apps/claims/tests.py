@@ -136,6 +136,21 @@ class TestBrowseAndSearch:
         detail = response.json()["data"]
         assert detail["claim_progress"]["remaining"] == 5
 
+    def test_food_detail_open_to_guests(self, api_client, food_item):
+        response = api_client.get(
+            reverse("receiver_donations:receiver-food-detail", kwargs={"food_id": food_item.id}),
+            {"lat": LAT, "lng": LNG},
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["name"] == "Chicken Rice"
+
+    def test_food_detail_guest_requires_location(self, api_client, food_item):
+        response = api_client.get(
+            reverse("receiver_donations:receiver-food-detail", kwargs={"food_id": food_item.id}),
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "LOCATION_REQUIRED"
+
     def test_browse_uses_profile_location_by_default(self, api_client, receiver_user, food_item):
         client = auth_client(api_client, receiver_user)
         response = client.get(reverse("receiver_donations:receiver-browse"))
@@ -265,6 +280,11 @@ class TestBrowseAndSearch:
         assert data["foods_today"]["portions_available"] == 15
         assert data["foods_today"]["label"] == "3 foods given today"
 
+    def test_receiver_dashboard_open_to_guests(self, api_client, food_item):
+        response = api_client.get(reverse("receiver_donations:receiver-dashboard"))
+        assert response.status_code == 200
+        assert response.json()["data"]["foods_today"]["count"] == 1
+
     def test_browse_restaurants(self, api_client, receiver_user, food_item, restaurant_profile):
         restaurant_profile.opening_hours = "10:00–21:00 · Mon, Tue, Wed, Thu, Fri, Sat, Sun"
         restaurant_profile.opens_at = time(10, 0)
@@ -367,6 +387,21 @@ class TestClaims:
         data = response.json()["data"]
         assert data["used"] == 0
         assert data["can_claim"] is True
+
+    def test_guest_claim_requires_signup_or_login(self, api_client, food_item):
+        response = api_client.post(
+            reverse("receiver_claims:receiver-claims"),
+            {
+                "food_id": str(food_item.id),
+                "qr_payload": food_item.food_qr_data,
+                "lat": LAT,
+                "lng": LNG,
+            },
+            format="json",
+        )
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "AUTH_REQUIRED"
+        assert FoodClaim.objects.count() == 0
 
     def test_create_claim(self, api_client, receiver_user, food_item):
         client = auth_client(api_client, receiver_user)
