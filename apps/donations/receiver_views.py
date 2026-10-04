@@ -164,7 +164,7 @@ class BrowseRestaurantsView(GenericAPIView):
 
 
 class RestaurantDetailView(GenericAPIView):
-    permission_classes = [IsReceiver]
+    permission_classes = [AllowAny]
     serializer_class = LocationQuerySerializer
 
     @extend_schema(

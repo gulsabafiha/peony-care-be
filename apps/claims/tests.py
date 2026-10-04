@@ -361,6 +361,34 @@ class TestBrowseAndSearch:
         assert meal["sponsorship_type"] == "DIRECT"
         assert meal["is_sponsored"] is False
 
+    def test_restaurant_detail_open_to_guests(
+        self, api_client, restaurant_profile, food_item
+    ):
+        response = api_client.get(
+            reverse(
+                "receiver_donations:receiver-restaurant-detail",
+                kwargs={"restaurant_id": restaurant_profile.id},
+            ),
+            {"lat": LAT, "lng": LNG},
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["name"] == "Tian Tian Hainanese"
+        assert len(data["available_meals"]) == 1
+        assert data["available_meals"][0]["name"] == "Chicken Rice"
+
+    def test_restaurant_detail_guest_requires_location(
+        self, api_client, restaurant_profile, food_item
+    ):
+        response = api_client.get(
+            reverse(
+                "receiver_donations:receiver-restaurant-detail",
+                kwargs={"restaurant_id": restaurant_profile.id},
+            ),
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "LOCATION_REQUIRED"
+
     def test_restaurant_detail_not_found(self, api_client, receiver_user):
         client = auth_client(api_client, receiver_user)
         response = client.get(
