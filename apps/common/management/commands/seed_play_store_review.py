@@ -13,8 +13,8 @@ from apps.common.choices import UserRole
 from apps.common.phone import normalize_phone_e164
 
 # Defaults align with PLAY_STORE_REVIEW_PHONES in settings.
+# Both numbers must pass libphonenumber (Singapore 9999xxxx ranges do not).
 REVIEW_RECEIVER_PHONE = "+6590000001"
-REVIEW_RECEIVER_PHONE_ALT = "+6599990001"
 REVIEW_RESTAURANT_PHONE = "+6590000002"
 
 
@@ -27,10 +27,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         configured = review_phone_set()
         receiver_phone = normalize_phone_e164(REVIEW_RECEIVER_PHONE)
-        receiver_phone_alt = normalize_phone_e164(REVIEW_RECEIVER_PHONE_ALT)
         restaurant_phone = normalize_phone_e164(REVIEW_RESTAURANT_PHONE)
 
-        expected = {receiver_phone, receiver_phone_alt, restaurant_phone}
+        expected = {receiver_phone, restaurant_phone}
         if not expected.issubset(configured):
             self.stdout.write(
                 self.style.WARNING(
@@ -41,7 +40,6 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             receiver = self._seed_receiver(receiver_phone)
-            receiver_alt = self._seed_receiver(receiver_phone_alt)
             restaurant = self._seed_restaurant(restaurant_phone)
 
         otp = review_otp_code()
@@ -49,9 +47,6 @@ class Command(BaseCommand):
         self.stdout.write(f"  OTP (no SMS): {otp}")
         self.stdout.write(
             f"  Receiver:   {receiver.user.phone_e164}  ({receiver.display_name})"
-        )
-        self.stdout.write(
-            f"  Receiver:   {receiver_alt.user.phone_e164}  ({receiver_alt.display_name})"
         )
         self.stdout.write(
             f"  Restaurant: {restaurant.user.phone_e164}  ({restaurant.name})"

@@ -219,7 +219,7 @@ class TestUserManager:
 
 
 class TestPlayStoreReviewOtp:
-    REVIEW_PHONE = "+6599990001"
+    REVIEW_PHONE = "+6590000001"
 
     def test_review_phone_skips_sms_and_accepts_fixed_otp(self, api_client, settings):
         settings.PLAY_STORE_REVIEW_PHONES = self.REVIEW_PHONE
@@ -263,7 +263,7 @@ class TestPlayStoreReviewOtp:
         """Play Store demo number used in the app must accept fixed OTP 1234."""
         demo_phone = "+6590000001"
         settings.PLAY_STORE_REVIEW_PHONES = (
-            "+6590000001,+6590000002,+6599990001"
+            "+6590000001,+6590000002"
         )
         settings.PLAY_STORE_REVIEW_OTP = "1234"
 
@@ -300,7 +300,7 @@ class TestPlayStoreReviewOtp:
         """Play Store restaurant number must accept fixed OTP 1234."""
         restaurant_phone = "+6590000002"
         settings.PLAY_STORE_REVIEW_PHONES = (
-            "+6590000001,+6590000002,+6599990001"
+            "+6590000001,+6590000002"
         )
         settings.PLAY_STORE_REVIEW_OTP = "1234"
 
