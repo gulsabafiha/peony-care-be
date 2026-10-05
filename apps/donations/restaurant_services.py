@@ -44,6 +44,7 @@ from apps.common.uploads import (
     save_food_item_photo,
     save_restaurant_profile_photo,
 )
+from apps.donations.category_units import format_quantity_unit, resolve_unit
 from apps.donations.models import FoodItem
 from apps.notifications.models import Notification
 from apps.notifications.services import notify_nearby_receivers_of_new_food
@@ -607,7 +608,7 @@ def _build_post_success_payload(
         radius = int(radius_km) if radius_km.is_integer() else radius_km
         count = nearby_count
     category_label = _category_label(food.category)
-    unit = food.unit or "packs"
+    unit = format_quantity_unit(food.quantity_original, food.unit)
     address_short = restaurant.address.split(",")[0].strip() if restaurant.address else ""
 
     return {
@@ -626,7 +627,7 @@ def _build_post_success_payload(
         },
         "summary": {
             "title": food.name,
-            "subtitle": f"{food.quantity_original} {unit} · {category_label}",
+            "subtitle": f"{unit} · {category_label}",
             "category_label": category_label,
             "pickup_window_label": format_pickup_window(
                 food.pickup_start,
@@ -671,7 +672,7 @@ def create_donation(user: User, data: dict, request=None) -> dict:
         name=data["name"],
         description=data.get("description", ""),
         category=data["category"],
-        unit=data.get("unit", "packs"),
+        unit=resolve_unit(data["category"], data.get("unit")),
         photo_url=photo_url,
         quantity_original=data["quantity"],
         quantity_available=data["quantity"],
@@ -752,6 +753,10 @@ def update_donation(user: User, food_id: str, data: dict) -> dict:
                     http_status=409,
                 )
             setattr(food, field, data[field])
+
+    if "category" in data or "unit" in data:
+        supplied = data.get("unit") if "unit" in data else food.unit
+        food.unit = resolve_unit(food.category, supplied)
 
     if "quantity" in data:
         if data["quantity"] < food.quantity_claimed:
@@ -1069,9 +1074,8 @@ def _serialize_available_meal(food: FoodItem) -> dict:
     title = food.name
     if is_sponsored:
         title = f"{food.name} · Sponsored"
-    packs = food.quantity_original
     unit = food.unit or "pack"
-    unit_label = f"{packs} {unit}{'s' if packs != 1 else ''}"
+    unit_label = format_quantity_unit(food.quantity_original, unit)
     sponsor = food.sponsor_display_name or None
     if is_sponsored and sponsor:
         subtitle = f"{unit_label} · by {sponsor}"

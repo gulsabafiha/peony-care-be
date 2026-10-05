@@ -292,9 +292,10 @@ def _serialize_meal_summary(food: FoodItem) -> dict:
     is_sponsored = food.sponsorship_type != SponsorshipType.DIRECT
     sponsor = food.sponsor_display_name or None
     title = f"{food.name} · Sponsored" if is_sponsored else food.name
-    packs = food.quantity_original
+    from apps.donations.category_units import format_quantity_unit
+
     unit = food.unit or "pack"
-    unit_label = f"{packs} {unit}{'s' if packs != 1 else ''}"
+    unit_label = format_quantity_unit(food.quantity_original, unit)
     if is_sponsored and sponsor:
         subtitle = f"{unit_label} · by {sponsor}"
     else:

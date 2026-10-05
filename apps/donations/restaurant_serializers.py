@@ -109,12 +109,19 @@ class RecurrenceDaysField(serializers.Field):
         return value or []
 
 
+class FoodCategoryOptionSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    label = serializers.CharField()
+    default_unit = serializers.CharField()
+    units = serializers.ListField(child=serializers.CharField())
+
+
 class CreateDonationSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     description = serializers.CharField(required=False, allow_blank=True, default="")
     notes = serializers.CharField(required=False, allow_blank=True)
     category = FoodCategoryField()
-    unit = serializers.CharField(max_length=20, required=False, default="packs")
+    unit = serializers.CharField(max_length=20, required=False, allow_blank=True)
     photo_url = serializers.URLField(required=False, allow_blank=True, default="")
     photo = serializers.FileField(required=False)
     quantity = serializers.IntegerField(min_value=1)
@@ -136,6 +143,8 @@ class CreateDonationSerializer(serializers.Serializer):
     def validate(self, data):
         if data.get("notes") and not data.get("description"):
             data["description"] = data["notes"]
+        if not str(data.get("unit") or "").strip():
+            data.pop("unit", None)
 
         schedule = data.pop("schedule", None)
         if schedule:

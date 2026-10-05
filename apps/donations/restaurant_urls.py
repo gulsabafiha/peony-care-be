@@ -7,6 +7,7 @@ from apps.donations.restaurant_views import (
     DonationCloseView,
     DonationDetailView,
     DonationListCreateView,
+    FoodCategoriesView,
     DonationReactivateView,
     LocationConfirmView,
     LocationReverseView,
@@ -21,6 +22,11 @@ urlpatterns = [
     path("dashboard/", DashboardView.as_view(), name="restaurant-dashboard"),
     path("analytics/", AnalyticsView.as_view(), name="restaurant-analytics"),
     path("donations/", DonationListCreateView.as_view(), name="restaurant-donations"),
+    path(
+        "donations/categories/",
+        FoodCategoriesView.as_view(),
+        name="restaurant-donation-categories",
+    ),
     path(
         "donations/<uuid:food_id>/",
         DonationDetailView.as_view(),

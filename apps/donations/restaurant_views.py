@@ -18,6 +18,7 @@ from apps.donations.restaurant_serializers import (
     ApprovalStatusSerializer,
     CreateDonationSerializer,
     DashboardSerializer,
+    FoodCategoryOptionSerializer,
     DonationListQuerySerializer,
     DonationListResponseSerializer,
     LocationConfirmSerializer,
@@ -72,6 +73,26 @@ class AnalyticsView(GenericAPIView):
                 range_key=serializer.validated_data.get("range", "30D"),
             )
         )
+
+
+class FoodCategoriesView(GenericAPIView):
+    permission_classes = [IsRestaurant]
+
+    @extend_schema(
+        tags=["Restaurant"],
+        summary="Food categories and the quantity units for each",
+        responses={
+            200: enveloped_schema(
+                FoodCategoryOptionSerializer,
+                "FoodCategoriesEnvelope",
+                many=True,
+            )
+        },
+    )
+    def get(self, request):
+        from apps.donations.category_units import list_food_categories
+
+        return success_response(list_food_categories())
 
 
 class DonationListCreateView(GenericAPIView):

@@ -150,6 +150,7 @@ class TestRestaurantDonations:
         assert "|" in data["food_qr_data"]
         assert data["description"] == "Contains sesame. Packed hot."
         assert data["recurrence_label"] == "Mon, Tue, Wed, Thu, Fri, Sat"
+        assert data["unit"] == "pack"
         assert data["percent_claimed"] == 0
         assert data["success_message"] == "Donation posted"
         assert data["summary"]["title"] == "Chicken Rice"
@@ -170,6 +171,42 @@ class TestRestaurantDonations:
         assert payload["summary"]["inactive_count"] == 0
         assert len(payload["groups"]) == 1
         assert len(payload["groups"][0]["items"]) == 1
+
+    def test_category_sets_quantity_unit(self, api_client, restaurant_user):
+        client = auth_client(api_client, restaurant_user)
+        categories = client.get(
+            reverse("restaurant_donations:restaurant-donation-categories")
+        )
+        assert categories.status_code == 200
+        drinks = next(
+            item for item in categories.json()["data"] if item["code"] == "DRINKS"
+        )
+        assert drinks["default_unit"] == "cup"
+        assert drinks["units"] == ["cup", "glass", "bottle"]
+
+        created = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {"name": "Iced Tea", "category": "DRINKS", "quantity": 4},
+            format="json",
+        )
+        assert created.status_code == 201
+        data = created.json()["data"]
+        assert data["unit"] == "cup"
+        assert data["summary"]["subtitle"] == "4 cups · Drinks"
+
+        chosen = client.post(
+            reverse("restaurant_donations:restaurant-donations"),
+            {
+                "name": "Lime Juice",
+                "category": "DRINKS",
+                "quantity": 2,
+                "unit": "glass",
+            },
+            format="json",
+        )
+        assert chosen.status_code == 201
+        assert chosen.json()["data"]["unit"] == "glass"
+        assert chosen.json()["data"]["summary"]["subtitle"] == "2 glasses · Drinks"
 
     def test_custom_days_accepts_weekday_names_and_legacy_category(
         self, api_client, restaurant_user
