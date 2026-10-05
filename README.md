@@ -77,7 +77,7 @@ docker compose exec web python manage.py seed_play_store_review
 |------|-------|-----|
 | Receiver | `+6590000001` | `1234` |
 | Receiver | `+6599990001` | `1234` |
-| Restaurant | `+6599990002` | `1234` |
+| Restaurant | `+6590000002` | `1234` |
 
 Configure via `PLAY_STORE_REVIEW_PHONES` and `PLAY_STORE_REVIEW_OTP`. Put these credentials in the Play Console review notes.
 

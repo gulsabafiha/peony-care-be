@@ -8,7 +8,7 @@ CATEGORY_UNITS: dict[str, tuple[str, ...]] = {
     FoodCategory.RICE: ("plate", "pack", "box"),
     FoodCategory.NOODLES: ("bowl", "pack", "box"),
     FoodCategory.BREAD_BAKERY: ("piece", "loaf", "pack"),
-    FoodCategory.VEGETABLES: ("pack"),
+    FoodCategory.VEGETABLES: ("pack",),
     FoodCategory.FRUITS: ("piece", "pack"),
     FoodCategory.PROTEIN: ("piece", "pack"),
     FoodCategory.SOUP: ("bowl", "cup", "pack"),

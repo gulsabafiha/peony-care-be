@@ -144,7 +144,7 @@ OTP_DEV_BYPASS_CODE = config("OTP_DEV_BYPASS_CODE", default="0000")
 # Play Store reviewers: comma-separated E.164 phones; fixed OTP; SMS skipped
 PLAY_STORE_REVIEW_PHONES = config(
     "PLAY_STORE_REVIEW_PHONES",
-    default="+6590000001,+6599990001,+6599990002",
+    default="+6590000001,+6590000002,+6599990001",
 )
 PLAY_STORE_REVIEW_OTP = config("PLAY_STORE_REVIEW_OTP", default="1234")
 REGISTRATION_TOKEN_MAX_AGE_SECONDS = config(

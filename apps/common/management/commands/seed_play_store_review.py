@@ -15,7 +15,7 @@ from apps.common.phone import normalize_phone_e164
 # Defaults align with PLAY_STORE_REVIEW_PHONES in settings.
 REVIEW_RECEIVER_PHONE = "+6590000001"
 REVIEW_RECEIVER_PHONE_ALT = "+6599990001"
-REVIEW_RESTAURANT_PHONE = "+6599990002"
+REVIEW_RESTAURANT_PHONE = "+6590000002"
 
 
 class Command(BaseCommand):

@@ -263,7 +263,7 @@ class TestPlayStoreReviewOtp:
         """Play Store demo number used in the app must accept fixed OTP 1234."""
         demo_phone = "+6590000001"
         settings.PLAY_STORE_REVIEW_PHONES = (
-            "+6590000001,+6599990001,+6599990002"
+            "+6590000001,+6590000002,+6599990001"
         )
         settings.PLAY_STORE_REVIEW_OTP = "1234"
 
@@ -295,6 +295,44 @@ class TestPlayStoreReviewOtp:
         )
         assert verify.status_code == 200
         assert "access" in verify.json()["data"]
+
+    def test_demo_restaurant_6590000002_accepts_1234(self, api_client, settings):
+        """Play Store restaurant number must accept fixed OTP 1234."""
+        restaurant_phone = "+6590000002"
+        settings.PLAY_STORE_REVIEW_PHONES = (
+            "+6590000001,+6590000002,+6599990001"
+        )
+        settings.PLAY_STORE_REVIEW_OTP = "1234"
+
+        from apps.accounts.models import RestaurantProfile
+
+        user = User.objects.create_user(
+            phone_e164=restaurant_phone,
+            role=UserRole.RESTAURANT,
+            is_active=True,
+        )
+        RestaurantProfile.objects.create(
+            user=user,
+            name="Udufood Demo Kitchen",
+            uen="T00SS0001A",
+            address="1 Fullerton Road, Singapore 049213",
+            postal_code="049213",
+            latitude=1.2863,
+            longitude=103.8545,
+            contact_name="Play Store Reviewer",
+            contact_phone=restaurant_phone,
+            is_approved=True,
+            is_verified=True,
+        )
+
+        verify = api_client.post(
+            reverse("auth-otp-verify"),
+            {"phone": restaurant_phone, "code": "1234"},
+            format="json",
+        )
+        assert verify.status_code == 200
+        assert "access" in verify.json()["data"]
+        assert verify.json()["data"]["user"]["role"] == UserRole.RESTAURANT
 
     @patch("apps.accounts.services.check_twilio_verify_otp", return_value=True)
     @patch("apps.accounts.otp_sms._send_via_twilio_verify")
